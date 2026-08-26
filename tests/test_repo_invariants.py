@@ -155,20 +155,20 @@ def test_the_package_is_importable_under_its_distribution_name() -> None:
     )
 
 
-def test_wheel_packages_names_the_package_not_the_layout_dir() -> None:
-    """Guard the src-layout packaging defect.
+def test_wheel_packages_name_real_packages() -> None:
+    """Every declared wheel package must be an importable package directory.
 
-    `packages = ["src"]` builds a wheel whose top-level module is `src` — a
-    namespace package colliding with every project that repeats the mistake,
-    and `import pomodoro` fails outright. Each entry must name a real package
-    directory inside the layout dir, not the layout dir itself.
+    Guards the defect the house template shipped: `packages = ["src"]` named the
+    layout directory, so the wheel's top-level module was the `src` namespace
+    package and `import pomodoro` raised ModuleNotFoundError. A layout directory
+    is never a valid entry.
     """
     config = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())
     packages = config["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"]
     assert packages, "no wheel packages declared"
     for entry in packages:
         path = REPO_ROOT / entry
-        assert path.name != "src", (
-            f"{entry!r} names the layout directory; name the package inside it"
+        assert path.name not in {"src", "lib"}, (
+            f"{entry!r} names a layout directory; name the package itself"
         )
         assert (path / "__init__.py").is_file(), f"{entry!r} is not a package"

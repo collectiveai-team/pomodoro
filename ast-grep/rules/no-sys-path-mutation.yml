@@ -1,0 +1,11 @@
+id: no-sys-path-mutation
+language: python
+severity: error
+message: "Imports must not come from sys.path. Mutating sys.path hides where a module resolves from and breaks the installed-package contract — depend on the installed distribution (`uv sync`) instead, and let pytest use --import-mode=importlib."
+rule:
+  any:
+    - pattern: sys.path.insert($$$ARGS)
+    - pattern: sys.path.append($$$ARGS)
+    - pattern: sys.path.extend($$$ARGS)
+    - pattern: sys.path = $$$ARGS
+    - pattern: sys.path += $$$ARGS

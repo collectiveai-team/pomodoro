@@ -5,7 +5,7 @@ file instead of inferring the project from nearby files.
 
 ## Status
 
-Stack: **Python 3.14 with uv**. Tooling, gates, and a `src/pomodoro` package
+Stack: **Python 3.14 with uv**. Tooling, gates, and a root `pomodoro` package
 placeholder exist; the domain model does not yet. Sections marked **OPEN** below
 await the product objective. Do not invent them; ask.
 
@@ -107,7 +107,7 @@ Configured centrally in `pyproject.toml`; do not re-litigate per file.
 - **no-utils**: no `utils.py`/`helpers.py`/`aux.py`/`misc.py`/`common.py`. Name a
   module for what it holds.
 - **repo-shape**: no notebooks, `resources/`, `reports/`, or `data/` inside
-  `src/pomodoro`.
+  `pomodoro`.
 - **deptry** keeps declared dependencies and the real import graph in sync — no
   unused, missing, or dev-vs-prod misplaced dependencies.
 - **ast-grep** (`ast-grep/rules/`) rejects dict-shaped returns from boundary
@@ -119,7 +119,8 @@ shell out to `git` and `orq-lite` by name).
 
 ## Architecture boundaries
 
-The import package is `src/pomodoro`, packaged as a wheel by hatchling.
+The import package is `pomodoro` at the repository root (flat layout), packaged
+as a wheel by hatchling.
 
 The house layer direction is `entrypoints -> api -> database|impl -> core`: a
 higher layer may import lower ones, never the reverse, and `api` is the only

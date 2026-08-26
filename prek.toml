@@ -196,12 +196,12 @@ priority = 2
 
 # MARK: repo-shape
 # CES-32: notebooks, resources/, reports/, and data/ do not belong inside the import package.
-# src/pomodoro is a copier-style placeholder — resolve it to your top-level package dir
+# The import package dir, resolved from the template's copier-style placeholder
 # at install time (the guide instructs the fill); until then this hook never matches.
 [[repos.hooks]]
 id = "repo-shape"
 name = "repo-shape (no notebooks/resources/reports/data in the package)"
 entry = "python3 -c \"import sys; [print(f'Error: CES-32 (repo-shape): {f} does not belong inside the import package — keep notebooks/resources/reports/data outside it.') for f in sys.argv[1:]]; sys.exit(1 if sys.argv[1:] else 0)\""
 language = "system"
-files = "^src/pomodoro/(.*\\.ipynb$|(.*/)?(resources|reports|data)/.*)"
+files = "^pomodoro/(.*\\.ipynb$|(.*/)?(resources|reports|data)/.*)"
 priority = 2

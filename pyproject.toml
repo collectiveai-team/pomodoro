@@ -7,7 +7,7 @@ build-backend = "hatchling.build"
 source = "vcs"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/pomodoro"]
+packages = ["pomodoro"]
 
 # MARK: Ruff
 [tool.ruff]
@@ -126,6 +126,11 @@ disable-project-excludes-heuristics = true
 
 # MARK: Pytest
 [tool.pytest.ini_options]
+# Imports must never come from sys.path: `importlib` mode imports test modules
+# without inserting their directory, so the package under test resolves from the
+# installed distribution only. The default `prepend` mode mutates sys.path.
+addopts = ["--import-mode=importlib"]
+consider_namespace_packages = false
 asyncio_mode = "auto"
 testpaths = ["tests"]
 markers = [
