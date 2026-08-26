@@ -151,6 +151,12 @@
       "skillPath": "skills/engineering/triage/SKILL.md",
       "computedHash": "1bc5349f0b61e19a6df61496b5a03d88cd69595dd303353f87945997a9e4a884"
     },
+    "using-orq-lite": {
+      "source": "collectiveai-team/orquesta-lite",
+      "sourceType": "github",
+      "skillPath": "skills/using-orq-lite/SKILL.md",
+      "computedHash": "674b694a47619bcc34087b3f46c6b302bccc1ba617830501925e573c9be3d341"
+    },
     "varlock": {
       "source": "dmno-dev/varlock",
       "sourceType": "github",

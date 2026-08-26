@@ -1,6 +1,26 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "_source": "orq-lite:command-filter",
+            "command": "/home/linuxbrew/.linuxbrew/bin/rtk hook claude",
+            "type": "command"
+          }
+        ],
+        "matcher": "Bash"
+      }
+    ]
+  },
   "permissions": {
+    "allow": [
+      "Read(./.env.schema)",
+      "Read(./**/.env.schema)",
+      "Read(./.env.example)",
+      "Read(./**/.env.example)"
+    ],
     "deny": [
       "Read(./.env)",
       "Read(./.env.*)",
@@ -58,12 +78,6 @@
       "Bash(varlock reveal:*)",
       "Bash(*base64*|*bash*)",
       "Bash(*base64*|*sh*)"
-    ],
-    "allow": [
-      "Read(./.env.schema)",
-      "Read(./**/.env.schema)",
-      "Read(./.env.example)",
-      "Read(./**/.env.example)"
     ]
   }
 }
