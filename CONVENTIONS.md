@@ -3,11 +3,11 @@
 Repository rules for every agent and human working in this repo. Roles read this
 file instead of inferring the project from nearby files.
 
-## Status: pre-stack
+## Status
 
-This repository currently contains **only tooling** — no application code, no
-language runtime, no package manager, no tests. Sections marked **OPEN** below
-cannot be filled until the stack is chosen. Do not invent them; ask.
+Stack: **Python 3.14 with uv**. Tooling, gates, and a `src/pomodoro` package
+placeholder exist; the domain model does not yet. Sections marked **OPEN** below
+await the product objective. Do not invent them; ask.
 
 ## Commit policy
 
@@ -91,33 +91,82 @@ that is consistently too expensive is a code smell to flag, not a limit to raise
   in issue titles, test names, and proposals; surface ADR contradictions
   explicitly rather than silently overriding them. See `docs/agents/domain.md`.
 
-## Code style — OPEN
+## Code style
 
-Depends on the stack. Fill in: formatter and linter with their exact
-configuration, import ordering, naming, typing strictness, error-handling and
-logging conventions.
+Configured centrally in `pyproject.toml`; do not re-litigate per file.
 
-## Architecture boundaries — OPEN
+- **ruff** is the linter and formatter: line length 100, double quotes, isort
+  import ordering, google-convention docstrings, mccabe complexity ≤ 10.
+  Relative imports are banned outright — use absolute package imports so modules
+  can move.
+- **pyrefly** type-checks against the same `pyproject.toml`.
+- **complexipy** caps *cognitive* complexity at 15 per function, which penalises
+  nesting and control-flow breaks that ruff's cyclomatic check forgives. Hoist a
+  nested helper to module level rather than raising the ceiling.
+- **file-size-guard** warns at 400 lines and fails at 700.
+- **no-utils**: no `utils.py`/`helpers.py`/`aux.py`/`misc.py`/`common.py`. Name a
+  module for what it holds.
+- **repo-shape**: no notebooks, `resources/`, `reports/`, or `data/` inside
+  `src/pomodoro`.
+- **deptry** keeps declared dependencies and the real import graph in sync — no
+  unused, missing, or dev-vs-prod misplaced dependencies.
+- **ast-grep** (`ast-grep/rules/`) rejects dict-shaped returns from boundary
+  functions: prefer a `@dataclass`, or a pydantic model where validation matters.
 
-Depends on the stack. Fill in: module/package layout, dependency direction, what
-may import what, where side effects and I/O are allowed.
+Legitimate exceptions belong in the central config, not in per-file noqa drifts.
+`tests/**` already waives `S101` (assert), `INP001`, and `S603`/`S607` (tests
+shell out to `git` and `orq-lite` by name).
 
-## Test strategy — OPEN
+## Architecture boundaries
 
-Depends on the stack. Fill in: framework, unit/integration split, fixture and
-factory rules, what may touch the network or a real database (the deterministic
-suite must touch neither), coverage expectations.
+The import package is `src/pomodoro`, packaged as a wheel by hatchling.
 
-The deterministic gates `lint_argv` and `test_argv` in `team.json` are currently
-**empty**, so every gated orq-lite flow refuses to start. They must be argv
-arrays runnable from the repository root — no pipelines, redirects, `cd`, or env
-assignments — proven green from a fresh clone **and** proven able to go red.
+The house layer direction is `entrypoints -> api -> database|impl -> core`: a
+higher layer may import lower ones, never the reverse, and `api` is the only
+inbound HTTP boundary. `pyproject.toml` carries a commented `[tool.importlinter]`
+skeleton — uncomment and enforce it once the package actually has layers.
 
-## Compatibility promises — OPEN
+**OPEN** until the objective defines them: the concrete module layout and where
+side effects and I/O are permitted.
 
-Depends on the stack and whether anything is published. Fill in: supported
-runtime versions, public API surface and its stability, deprecation policy,
-migration expectations.
+## Test strategy
+
+**pytest**, tests under `tests/`, `asyncio_mode = "auto"`. Markers: `unit` (fast,
+isolated, no external deps), `integration` (external services or multi-component),
+`e2e` (smoke).
+
+- **pytest-randomly** randomises order every run with a reproducible seed. An
+  order-dependent or state-leaking test is therefore a bug, not bad luck.
+- **pytest-timeout** bounds hangs.
+- The deterministic suite must touch **no network and no real database**, and must
+  not depend on local `.env` values, service credentials, or execution order.
+- A check that depends on gitignored local state (such as `team.json`) must
+  `pytest.skip` when it is absent, so a fresh clone stays green.
+
+The deterministic gates in `team.json`, both proven green from a fresh clone and
+each proven able to go red:
+
+```json
+"lint_argv": ["uv", "run", "ruff", "check", "."],
+"test_argv": ["uv", "run", "pytest", "-q"]
+```
+
+They are argv arrays run directly from the repository root with shell access
+disabled — never pipelines, redirects, `cd`, or environment assignments. **A
+failing gate aborts the entire orq-lite flow**, and later roles treat green as
+evidence, so never weaken a gate to make a run pass: fix the project.
+
+## Compatibility promises
+
+- **Python 3.14** is the floor (`requires-python = ">=3.14"`, pinned for the
+  toolchain by `.python-version`).
+- The version is derived from git tags (`vX.Y.Z`) by hatch-vcs; untagged builds
+  get a `0.1.devN+g<sha>` development version. Do not hand-write a version.
+- Nothing is published to any index and there is no release workflow, so there is
+  no external API stability promise yet.
+
+**OPEN** once anything is consumed outside this repo: the public surface, its
+stability guarantee, and a deprecation policy.
 
 ## Browser and API verification — OPEN
 
