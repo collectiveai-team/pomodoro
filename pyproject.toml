@@ -7,7 +7,7 @@ build-backend = "hatchling.build"
 source = "vcs"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src"]
+packages = ["src/pomodoro"]
 
 # MARK: Ruff
 [tool.ruff]

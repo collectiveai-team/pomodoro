@@ -4,10 +4,12 @@ These run in any clone: they read git history and tracked files only. Checks tha
 depend on local, gitignored orq-lite runtime state skip when it is absent.
 """
 
+import importlib.util
 import json
 import re
 import shutil
 import subprocess
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -144,3 +146,29 @@ def test_orq_lite_flow_roles_resolve_against_team_json() -> None:
     }
     unresolved = {flow: roles for flow, roles in missing.items() if roles}
     assert unresolved == {}, f"flows reference roles absent from team.json: {unresolved}"
+
+
+def test_the_package_is_importable_under_its_distribution_name() -> None:
+    """`import pomodoro` must work, not `import src.pomodoro`."""
+    assert importlib.util.find_spec("pomodoro") is not None, (
+        "the pomodoro package is not importable"
+    )
+
+
+def test_wheel_packages_names_the_package_not_the_layout_dir() -> None:
+    """Guard the src-layout packaging defect.
+
+    `packages = ["src"]` builds a wheel whose top-level module is `src` — a
+    namespace package colliding with every project that repeats the mistake,
+    and `import pomodoro` fails outright. Each entry must name a real package
+    directory inside the layout dir, not the layout dir itself.
+    """
+    config = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())
+    packages = config["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"]
+    assert packages, "no wheel packages declared"
+    for entry in packages:
+        path = REPO_ROOT / entry
+        assert path.name != "src", (
+            f"{entry!r} names the layout directory; name the package inside it"
+        )
+        assert (path / "__init__.py").is_file(), f"{entry!r} is not a package"
