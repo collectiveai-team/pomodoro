@@ -1,0 +1,7 @@
+.env
+!.env.schema
+.tmp/
+.scratch/
+.worktrees/
+.journals/
+.agents/skills/
