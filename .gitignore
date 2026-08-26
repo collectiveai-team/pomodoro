@@ -7,3 +7,10 @@
 .agents/skills/
 .orquestalite/
 team.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
