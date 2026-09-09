@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<!--
+  PROTOTYPE — throwaway, not production code. Answers wayfinder ticket #7
+  ("Prototipar vista de Historial/Calendario", child of map #1).
+
+  Plan: three structurally different variants of the History/Calendar month
+  view, switchable via ?variant=A|B|C on this single static file, using
+  sample data for September 2026. Open directly in a browser (file://).
+-->
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>PROTOTYPE — Vista de Historial/Calendario</title>
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #f7f6f3;
+    --panel: #ffffff;
+    --ink: #2b2b28;
+    --ink-dim: #7a766e;
+    --border: #e2ded4;
+    --accent: #b5533c;
+    --accent-soft: #f0ded7;
+    --today-ring: #2b2b28;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 32px 24px 96px;
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.4 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  .prototype-banner {
+    max-width: 760px;
+    margin: 0 auto 20px;
+    padding: 8px 14px;
+    background: #fff3cd;
+    border: 1px solid #e8d48b;
+    border-radius: 6px;
+    font-size: 12.5px;
+    color: #6b5900;
+  }
+  .app {
+    max-width: 760px;
+    margin: 0 auto;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+  }
+  .month-nav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .month-nav button {
+    border: 1px solid var(--border);
+    background: var(--panel);
+    border-radius: 6px;
+    width: 32px;
+    height: 32px;
+    font-size: 16px;
+    cursor: pointer;
+  }
+  .month-nav button:hover { background: var(--bg); }
+  .month-nav h1 {
+    font-size: 18px;
+    margin: 0;
+    min-width: 200px;
+    text-align: center;
+  }
+  .weekdays, .grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 6px;
+  }
+  .weekdays {
+    margin-bottom: 6px;
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--ink-dim);
+    text-align: center;
+  }
+  .cell {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel);
+    cursor: default;
+    position: relative;
+    text-align: left;
+  }
+  .cell.empty { border: none; background: transparent; cursor: default; }
+  .cell.today { box-shadow: inset 0 0 0 2px var(--today-ring); }
+  .cell.selected { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .cell.has-activity { cursor: pointer; }
+  .cell.has-activity:hover { border-color: var(--accent); }
+  .daynum { font-size: 12px; color: var(--ink-dim); }
+
+  /* ---------- Variant A: heatmap ---------- */
+  [data-variant="A"] .cell { height: 58px; padding: 6px; }
+  [data-variant="A"] .cell .count-corner {
+    position: absolute; bottom: 4px; right: 6px;
+    font-size: 11px; font-weight: 600; color: inherit;
+  }
+  [data-variant="A"] .heat-0 { background: var(--panel); }
+  [data-variant="A"] .heat-1 { background: #ded2ea; }
+  [data-variant="A"] .heat-2 { background: #b79bd0; color: #fff; }
+  [data-variant="A"] .heat-3 { background: #8f68b6; color: #fff; }
+  [data-variant="A"] .heat-4 { background: #5f3a8c; color: #fff; }
+  [data-variant="A"] .heat-1 .daynum,
+  [data-variant="A"] .heat-2 .daynum,
+  [data-variant="A"] .heat-3 .daynum,
+  [data-variant="A"] .heat-4 .daynum { color: inherit; opacity: .85; }
+  .legend { display: flex; align-items: center; gap: 6px; justify-content: flex-end; margin-top: 10px; font-size: 11.5px; color: var(--ink-dim); }
+  .legend .swatch { width: 14px; height: 14px; border-radius: 3px; border: 1px solid var(--border); }
+  .detail-strip {
+    margin-top: 14px;
+    border-top: 1px dashed var(--border);
+    padding-top: 12px;
+    min-height: 40px;
+  }
+  .detail-strip .placeholder { color: var(--ink-dim); font-size: 13px; }
+  .detail-strip h2 { font-size: 14px; margin: 0 0 8px; }
+  .detail-row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 13.5px; }
+  .detail-row:last-child { border-bottom: none; }
+  .detail-row .task-name { color: var(--ink); }
+  .detail-row .task-meta { color: var(--ink-dim); font-variant-numeric: tabular-nums; }
+
+  /* ---------- Variant B: mini task list + modal ---------- */
+  [data-variant="B"] .cell { height: 92px; padding: 6px; overflow: hidden; }
+  [data-variant="B"] .mini-task {
+    font-size: 10.5px;
+    background: var(--accent-soft);
+    color: #7a3624;
+    border-radius: 4px;
+    padding: 1px 5px;
+    margin-top: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  [data-variant="B"] .mini-more { font-size: 10.5px; color: var(--ink-dim); margin-top: 3px; }
+  .modal-backdrop {
+    position: fixed; inset: 0; background: rgba(30,28,24,.35);
+    display: none; align-items: center; justify-content: center; z-index: 20;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal {
+    background: var(--panel); border-radius: 10px; border: 1px solid var(--border);
+    padding: 20px; width: 340px; max-width: 90vw;
+    box-shadow: 0 12px 32px rgba(0,0,0,.18);
+  }
+  .modal h2 { margin: 0 0 4px; font-size: 15px; }
+  .modal .modal-sub { color: var(--ink-dim); font-size: 12px; margin-bottom: 12px; }
+  .modal .close-btn { float: right; border: none; background: none; font-size: 16px; cursor: pointer; color: var(--ink-dim); }
+
+  /* ---------- Variant C: badge + docked sidebar ---------- */
+  .layout-c { display: flex; gap: 20px; align-items: flex-start; }
+  .layout-c .calendar-col { flex: 1 1 auto; }
+  [data-variant="C"] .cell { height: 44px; padding: 5px; }
+  [data-variant="C"] .badge {
+    position: absolute; top: 4px; right: 5px;
+    min-width: 16px; height: 16px; border-radius: 8px;
+    background: var(--ink); color: #fff;
+    font-size: 10px; font-weight: 600;
+    display: flex; align-items: center; justify-content: center;
+    padding: 0 4px;
+  }
+  .sidebar {
+    flex: 0 0 200px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    background: var(--bg);
+    min-height: 260px;
+  }
+  .sidebar h2 { font-size: 13.5px; margin: 0 0 2px; }
+  .sidebar .sidebar-sub { color: var(--ink-dim); font-size: 11.5px; margin-bottom: 10px; }
+  .sidebar .detail-row { font-size: 12.5px; }
+
+  /* ---------- switcher bar (prototype tooling, not part of the design) ---------- */
+  .switcher {
+    position: fixed;
+    left: 50%; bottom: 18px; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 10px;
+    background: #1c1a17; color: #fff;
+    padding: 8px 10px; border-radius: 999px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.35);
+    font-size: 13px; z-index: 30;
+  }
+  .switcher button {
+    border: none; background: rgba(255,255,255,.12); color: #fff;
+    width: 26px; height: 26px; border-radius: 50%; cursor: pointer; font-size: 14px;
+  }
+  .switcher button:hover { background: rgba(255,255,255,.22); }
+  .switcher .label { min-width: 190px; text-align: center; }
+  .switcher .label small { display: block; opacity: .6; font-size: 10.5px; }
+</style>
+</head>
+<body>
+
+  <div class="prototype-banner">
+    PROTOTYPE — ticket #7. Tres variantes de la vista de Historial/Calendario, cambiables con la barra de abajo o las flechas del teclado. Datos de ejemplo (no reales).
+  </div>
+
+  <div class="app" id="app">
+    <!-- rendered by JS -->
+  </div>
+
+  <div class="switcher">
+    <button id="prevVariant" aria-label="Variante anterior">‹</button>
+    <div class="label" id="variantLabel"></div>
+    <button id="nextVariant" aria-label="Variante siguiente">›</button>
+  </div>
+
+<script>
+// ---- sample data: September 2026, keyed by day-of-month ----
+const YEAR = 2026, MONTH = 8; // JS months are 0-indexed: 8 = September
+const TODAY_DAY = 9;
+
+const SAMPLE = {
+  2:  [ { name: "Escribir informe trimestral", pomodoros: 3, minutes: 75 } ],
+  3:  [ { name: "Escribir informe trimestral", pomodoros: 1, minutes: 25 },
+        { name: "Revisar PRs pendientes", pomodoros: 2, minutes: 50 } ],
+  4:  [ { name: "Revisar PRs pendientes", pomodoros: 1, minutes: 18 } ],
+  7:  [ { name: "Preparar presentación cliente", pomodoros: 4, minutes: 100 },
+        { name: "Estudiar Rust", pomodoros: 1, minutes: 25 } ],
+  8:  [ { name: "Preparar presentación cliente", pomodoros: 2, minutes: 50 },
+        { name: "Revisar PRs pendientes", pomodoros: 1, minutes: 12 },
+        { name: "Planificar sprint", pomodoros: 1, minutes: 25 } ],
+  9:  [ { name: "Planificar sprint", pomodoros: 2, minutes: 50 },
+        { name: "Estudiar Rust", pomodoros: 2, minutes: 47 } ],
+  11: [ { name: "Escribir informe trimestral", pomodoros: 1, minutes: 25 } ],
+  14: [ { name: "Preparar presentación cliente", pomodoros: 5, minutes: 125 },
+        { name: "Revisar PRs pendientes", pomodoros: 1, minutes: 25 },
+        { name: "Planificar sprint", pomodoros: 1, minutes: 8 } ],
+  15: [ { name: "Preparar presentación cliente", pomodoros: 1, minutes: 25 } ],
+  18: [ { name: "Estudiar Rust", pomodoros: 3, minutes: 68 } ],
+  21: [ { name: "Revisar PRs pendientes", pomodoros: 2, minutes: 50 },
+        { name: "Planificar sprint", pomodoros: 2, minutes: 45 } ],
+  22: [ { name: "Planificar sprint", pomodoros: 1, minutes: 25 } ],
+  25: [ { name: "Escribir informe trimestral", pomodoros: 2, minutes: 50 },
+        { name: "Estudiar Rust", pomodoros: 1, minutes: 25 },
+        { name: "Revisar PRs pendientes", pomodoros: 1, minutes: 25 } ],
+  28: [ { name: "Preparar presentación cliente", pomodoros: 1, minutes: 20 } ],
+  29: [ { name: "Planificar sprint", pomodoros: 3, minutes: 70 } ],
+};
+
+function totalPomodoros(dayTasks) { return dayTasks.reduce((s, t) => s + t.pomodoros, 0); }
+function heatBucket(count) {
+  if (count === 0) return 0;
+  if (count <= 2) return 1;
+  if (count <= 4) return 2;
+  if (count <= 6) return 3;
+  return 4;
+}
+function fmtMinutes(m) {
+  const h = Math.floor(m / 60), r = m % 60;
+  return h ? `${h}h ${r}m` : `${r}m`;
+}
+
+const WEEKDAYS = ["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"];
+const MONTH_NAMES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio",
+  "Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+
+function buildDayCells() {
+  const firstOfMonth = new Date(YEAR, MONTH, 1);
+  // convert JS Sunday=0 to Monday-first index
+  const leadingBlanks = (firstOfMonth.getDay() + 6) % 7;
+  const daysInMonth = new Date(YEAR, MONTH + 1, 0).getDate();
+  const cells = [];
+  for (let i = 0; i < leadingBlanks; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+  return cells;
+}
+
+let selectedDay = TODAY_DAY;
+let variant = new URLSearchParams(location.search).get("variant") || "A";
+const VARIANTS = [
+  { key: "A", name: "Heatmap + franja de detalle" },
+  { key: "B", name: "Lista mini en celda + modal" },
+  { key: "C", name: "Insignia + panel lateral fijo" },
+];
+
+function render() {
+  document.body.dataset.variant = variant;
+  const app = document.getElementById("app");
+  const cells = buildDayCells();
+
+  const header = `
+    <div class="month-nav">
+      <button id="prevMonth" aria-label="Mes anterior">‹</button>
+      <h1>${MONTH_NAMES[MONTH]} ${YEAR}</h1>
+      <button id="nextMonth" aria-label="Mes siguiente">›</button>
+    </div>
+    <div class="weekdays">${WEEKDAYS.map(w => `<div>${w}</div>`).join("")}</div>
+  `;
+
+  let bodyHtml = "";
+  if (variant === "A") bodyHtml = renderVariantA(cells);
+  else if (variant === "B") bodyHtml = renderVariantB(cells);
+  else bodyHtml = renderVariantC(cells);
+
+  app.innerHTML = header + bodyHtml;
+  wireCellClicks();
+
+  if (variant === "B") wireModal();
+
+  const labelEl = document.getElementById("variantLabel");
+  const v = VARIANTS.find(v => v.key === variant);
+  labelEl.innerHTML = `${v.key} <small>${v.name}</small>`;
+}
+
+function renderVariantA(cells) {
+  const gridHtml = cells.map(d => {
+    if (d === null) return `<div class="cell empty"></div>`;
+    const tasks = SAMPLE[d] || [];
+    const count = totalPomodoros(tasks);
+    const bucket = heatBucket(count);
+    const classes = ["cell", `heat-${bucket}`];
+    if (d === TODAY_DAY) classes.push("today");
+    if (d === selectedDay) classes.push("selected");
+    if (tasks.length) classes.push("has-activity");
+    return `<div class="${classes.join(" ")}" data-day="${d}">
+      <div class="daynum">${d}</div>
+      ${count ? `<div class="count-corner">${count}</div>` : ""}
+    </div>`;
+  }).join("");
+
+  const legend = `
+    <div class="legend">
+      <span>Menos</span>
+      <span class="swatch heat-0" style="background:var(--panel)"></span>
+      <span class="swatch heat-1"></span>
+      <span class="swatch heat-2"></span>
+      <span class="swatch heat-3"></span>
+      <span class="swatch heat-4"></span>
+      <span>Más</span>
+    </div>`;
+
+  return `<div class="grid">${gridHtml}</div>${legend}${renderDetailStrip()}`;
+}
+
+function renderDetailStrip() {
+  const tasks = SAMPLE[selectedDay] || [];
+  if (!tasks.length) {
+    return `<div class="detail-strip"><div class="placeholder">Sin Pomodoros registrados ese día. Elegí un día con actividad.</div></div>`;
+  }
+  const rows = tasks.map(t => `
+    <div class="detail-row">
+      <span class="task-name">${t.name}</span>
+      <span class="task-meta">${t.pomodoros} Pomodoro${t.pomodoros !== 1 ? "s" : ""} · ${fmtMinutes(t.minutes)}</span>
+    </div>`).join("");
+  return `<div class="detail-strip">
+    <h2>${selectedDay} de ${MONTH_NAMES[MONTH]} — ${totalPomodoros(tasks)} Pomodoro${totalPomodoros(tasks) !== 1 ? "s" : ""} en total</h2>
+    ${rows}
+  </div>`;
+}
+
+function renderVariantB(cells) {
+  const MAX_VISIBLE = 2;
+  const gridHtml = cells.map(d => {
+    if (d === null) return `<div class="cell empty"></div>`;
+    const tasks = SAMPLE[d] || [];
+    const classes = ["cell"];
+    if (d === TODAY_DAY) classes.push("today");
+    if (tasks.length) classes.push("has-activity");
+    const visible = tasks.slice(0, MAX_VISIBLE);
+    const overflow = tasks.length - visible.length;
+    return `<div class="${classes.join(" ")}" data-day="${d}">
+      <div class="daynum">${d}</div>
+      ${visible.map(t => `<div class="mini-task">${t.name} ×${t.pomodoros}</div>`).join("")}
+      ${overflow > 0 ? `<div class="mini-more">+${overflow} más</div>` : ""}
+    </div>`;
+  }).join("");
+
+  return `<div class="grid">${gridHtml}</div>
+    <div class="modal-backdrop" id="modalBackdrop">
+      <div class="modal" id="modalContent"></div>
+    </div>`;
+}
+
+function modalContentHtml(day) {
+  const tasks = SAMPLE[day] || [];
+  const rows = tasks.map(t => `
+    <div class="detail-row">
+      <span class="task-name">${t.name}</span>
+      <span class="task-meta">${t.pomodoros} Pomodoro${t.pomodoros !== 1 ? "s" : ""} · ${fmtMinutes(t.minutes)}</span>
+    </div>`).join("") || `<div class="placeholder">Sin Pomodoros registrados.</div>`;
+  return `
+    <button class="close-btn" id="modalClose">×</button>
+    <h2>${day} de ${MONTH_NAMES[MONTH]} de ${YEAR}</h2>
+    <div class="modal-sub">${totalPomodoros(tasks)} Pomodoro${totalPomodoros(tasks) !== 1 ? "s" : ""} en total</div>
+    ${rows}
+  `;
+}
+
+function wireModal() {
+  const backdrop = document.getElementById("modalBackdrop");
+  document.getElementById("modalClose")?.addEventListener("click", () => backdrop.classList.remove("open"));
+  backdrop?.addEventListener("click", (e) => { if (e.target === backdrop) backdrop.classList.remove("open"); });
+}
+
+function renderVariantC(cells) {
+  const gridHtml = cells.map(d => {
+    if (d === null) return `<div class="cell empty"></div>`;
+    const tasks = SAMPLE[d] || [];
+    const count = totalPomodoros(tasks);
+    const classes = ["cell"];
+    if (d === TODAY_DAY) classes.push("today");
+    if (d === selectedDay) classes.push("selected");
+    if (tasks.length) classes.push("has-activity");
+    return `<div class="${classes.join(" ")}" data-day="${d}">
+      <div class="daynum">${d}</div>
+      ${count ? `<div class="badge">${count}</div>` : ""}
+    </div>`;
+  }).join("");
+
+  const tasks = SAMPLE[selectedDay] || [];
+  const rows = tasks.map(t => `
+    <div class="detail-row">
+      <span class="task-name">${t.name}</span>
+      <span class="task-meta">${t.pomodoros}× · ${fmtMinutes(t.minutes)}</span>
+    </div>`).join("") || `<div class="placeholder">Sin Pomodoros ese día.</div>`;
+
+  return `<div class="layout-c">
+    <div class="calendar-col"><div class="grid">${gridHtml}</div></div>
+    <div class="sidebar">
+      <h2>${selectedDay} de ${MONTH_NAMES[MONTH]}</h2>
+      <div class="sidebar-sub">${totalPomodoros(tasks)} Pomodoro${totalPomodoros(tasks) !== 1 ? "s" : ""} en total</div>
+      ${rows}
+    </div>
+  </div>`;
+}
+
+function wireCellClicks() {
+  document.querySelectorAll(".cell.has-activity").forEach(cellEl => {
+    cellEl.addEventListener("click", () => {
+      const day = Number(cellEl.dataset.day);
+      if (variant === "B") {
+        const backdrop = document.getElementById("modalBackdrop");
+        document.getElementById("modalContent").innerHTML = modalContentHtml(day);
+        backdrop.classList.add("open");
+        wireModal();
+      } else {
+        selectedDay = day;
+        render();
+      }
+    });
+  });
+  document.getElementById("prevMonth")?.addEventListener("click", () => alert("PROTOTYPE: navegación real de mes no implementada — mockup de un solo mes."));
+  document.getElementById("nextMonth")?.addEventListener("click", () => alert("PROTOTYPE: navegación real de mes no implementada — mockup de un solo mes."));
+}
+
+// ---- variant switcher (prototype tooling) ----
+function setVariant(newVariant) {
+  variant = newVariant;
+  const url = new URL(location.href);
+  url.searchParams.set("variant", variant);
+  history.replaceState({}, "", url);
+  render();
+}
+function cycleVariant(delta) {
+  const idx = VARIANTS.findIndex(v => v.key === variant);
+  const next = VARIANTS[(idx + delta + VARIANTS.length) % VARIANTS.length];
+  setVariant(next.key);
+}
+document.getElementById("prevVariant").addEventListener("click", () => cycleVariant(-1));
+document.getElementById("nextVariant").addEventListener("click", () => cycleVariant(1));
+document.addEventListener("keydown", (e) => {
+  const tag = document.activeElement?.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA" || document.activeElement?.isContentEditable) return;
+  if (e.key === "ArrowLeft") cycleVariant(-1);
+  if (e.key === "ArrowRight") cycleVariant(1);
+});
+
+render();
+</script>
+</body>
+</html>
