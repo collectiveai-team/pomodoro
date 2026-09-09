@@ -98,31 +98,34 @@ use-ignore-files = false
 disable-project-excludes-heuristics = true
 
 # MARK: import-linter (CES-5 layer direction, CES-17 api-boundary layout)
-# Commented skeleton — uncomment once the package actually has layers. Enforces the house import
-# direction: entrypoints -> api -> database/impl -> core (a higher layer may import lower ones,
-# never the reverse). Add `import-linter` to the dev group and run `uvx --from import-linter
-# lint-imports`. Replace `myapp` below with your import package name.
+# Layout and seam decided in docs/adr/0003-module-layout-and-core-gui-seam.md. Layer direction:
+# entrypoints -> api -> database -> core (a higher layer may import lower ones, never the
+# reverse; strict, non-skippable — entrypoints may only reach core/database through api). Still
+# commented out until pomodoro/{core,api,database,entrypoints} actually exist as packages —
+# uncomment then, add `import-linter` to the dev group, and run `uvx --from import-linter
+# lint-imports`.
 #
 # [tool.importlinter]
-# root_package = "myapp"
+# root_package = "pomodoro"
 #
 # [[tool.importlinter.contracts]]
 # name = "Layered architecture (CES-5)"
 # type = "layers"
 # layers = [
-#   "myapp.entrypoints",
-#   "myapp.api",
-#   "myapp.database | myapp.impl",
-#   "myapp.core",
+#   "pomodoro.entrypoints",
+#   "pomodoro.api",
+#   "pomodoro.database",
+#   "pomodoro.core",
 # ]
 #
-# # CES-17 api-boundary layout: the api package is the only inbound HTTP boundary; nothing
-# # outside api may import api.schemas/routers internals.
+# # CES-17 api-boundary layout: api is the sole inbound boundary. The layers contract above only
+# # forbids the reverse direction, so entrypoints could otherwise skip straight to core/database —
+# # this contract closes that gap.
 # [[tool.importlinter.contracts]]
 # name = "API is the only inbound boundary (CES-17)"
 # type = "forbidden"
-# source_modules = ["myapp.core", "myapp.database"]
-# forbidden_modules = ["myapp.api"]
+# source_modules = ["pomodoro.entrypoints"]
+# forbidden_modules = ["pomodoro.core", "pomodoro.database"]
 
 # MARK: Pytest
 [tool.pytest.ini_options]
