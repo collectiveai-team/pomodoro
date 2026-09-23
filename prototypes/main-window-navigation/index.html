@@ -1,0 +1,549 @@
+<!doctype html>
+<!--
+  PROTOTYPE -- throwaway, not production code. Answers wayfinder ticket #11
+  ("Prototipar layout de navegacion general de la ventana principal").
+
+  Pregunta: como se organiza la ventana principal (lista de Tasks activas,
+  timer/sesion, filtro nombre/Tag, Archivadas, Historial) y donde vive el
+  timer en todo momento.
+
+  Tres variantes estructuralmente distintas, switcheables con ?variant=A|B|C
+  (barra flotante abajo o flechas del teclado):
+    A. Rail lateral de navegacion + barra de timer siempre visible arriba.
+    B. Split fijo: panel de timer a la izquierda, pestanas a la derecha.
+    C. Pantallas separadas: el timer vive solo en su propia vista "Foco".
+
+  Todo en memoria, datos de ejemplo. El timer corre acelerado (1 s real =
+  1 min simulado) para poder ver las transiciones; los estados siguen la
+  spec de #4 (Idle / Running / Paused / AskingToLog / Break / ReadyForNext).
+  Identidad visual collectiveai.io reutilizada del prototipo de #7.
+-->
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ventana principal</title>
+<style>
+  @font-face { font-family: 'Olivetta'; src: url('fonts/olivetta-regular.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: swap; }
+  @font-face { font-family: 'Olivetta'; src: url('fonts/olivetta-semi-bold.woff2') format('woff2'); font-weight: 600; font-style: normal; font-display: swap; }
+  @font-face { font-family: 'Olivetta'; src: url('fonts/olivetta-black.woff2') format('woff2'); font-weight: 900; font-style: normal; font-display: swap; }
+  @font-face { font-family: 'Leitura'; src: url('fonts/leitura-italic.woff2') format('woff2'); font-weight: 400; font-style: italic; font-display: swap; }
+
+  :root {
+    color-scheme: light;
+    --ink: #1E1E1E; --ink-secondary: #4D4D4D; --ink-muted: #8C8C8C; --ink-on-accent: #FFFFFF;
+    --bg: #F5F5F5; --surface: #FFFFFF; --surface-paper: #F5F5F5; --surface-overlay: #F7F7F7;
+    --border: #E3E3E3; --border-strong: #C9C9C9;
+    --accent: #8054FF; --accent-pressed: #5C3CB9; --accent-soft: #ECE6FF; --accent-soft-ink: #5C3CB9;
+    --break: #1F8A70; --break-soft: #DDF3EC;
+    --heat-0: var(--surface); --heat-1: #E4DBFF; --heat-2: #C2AFFF; --heat-3: #8054FF; --heat-4: #331561;
+    --heat-3-ink: #FFFFFF; --heat-4-ink: #FFFFFF;
+    --notice-bg: #FCEFD9; --notice-border: #E7C784; --notice-ink: #5C4713;
+    --shadow: 0 12px 30px rgba(30, 20, 60, .14);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --ink: #DCD7E6; --ink-secondary: #A8A2B6; --ink-muted: #8C8598; --ink-on-accent: #16131C;
+      --bg: #0F0D13; --surface: #16131C; --surface-paper: #1F1B28; --surface-overlay: #2B2635;
+      --border: #3B3547; --border-strong: #6B6180;
+      --accent: #A98CFF; --accent-pressed: #8054FF; --accent-soft: #362A4D; --accent-soft-ink: #DCC9FF;
+      --break: #5FD1AE; --break-soft: #173A31;
+      --heat-0: var(--surface); --heat-1: #2B2635; --heat-2: #4A3D6B; --heat-3: #8054FF; --heat-4: #A98CFF;
+      --heat-3-ink: #FFFFFF; --heat-4-ink: #16131C;
+      --notice-bg: #362A15; --notice-border: #6B551C; --notice-ink: #F2D488;
+      --shadow: 0 12px 30px rgba(0, 0, 0, .5);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --ink: #DCD7E6; --ink-secondary: #A8A2B6; --ink-muted: #8C8598; --ink-on-accent: #16131C;
+    --bg: #0F0D13; --surface: #16131C; --surface-paper: #1F1B28; --surface-overlay: #2B2635;
+    --border: #3B3547; --border-strong: #6B6180;
+    --accent: #A98CFF; --accent-pressed: #8054FF; --accent-soft: #362A4D; --accent-soft-ink: #DCC9FF;
+    --break: #5FD1AE; --break-soft: #173A31;
+    --heat-0: var(--surface); --heat-1: #2B2635; --heat-2: #4A3D6B; --heat-3: #8054FF; --heat-4: #A98CFF;
+    --heat-3-ink: #FFFFFF; --heat-4-ink: #16131C;
+    --notice-bg: #362A15; --notice-border: #6B551C; --notice-ink: #F2D488;
+    --shadow: 0 12px 30px rgba(0, 0, 0, .5);
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 20px 16px 96px; background: var(--bg); color: var(--ink); font-family: 'Olivetta', system-ui, sans-serif; font-size: 14px; }
+  button { font-family: inherit; font-size: inherit; color: inherit; }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  .prototype-banner { max-width: 1000px; margin: 0 auto 10px; padding: 9px 14px; background: var(--notice-bg); border: 1px solid var(--notice-border); border-radius: 8px; font-size: 12.5px; color: var(--notice-ink); line-height: 1.45; }
+  .statebar { max-width: 1000px; margin: 0 auto 12px; font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--ink-secondary); display: flex; flex-wrap: wrap; gap: 6px 14px; }
+  .statebar b { color: var(--ink); }
+
+  /* ---- fake desktop window frame ---- */
+  .window { max-width: 1000px; height: 640px; margin: 0 auto; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 11px; box-shadow: var(--shadow); overflow: hidden; display: flex; flex-direction: column; }
+  .titlebar { flex: 0 0 34px; display: flex; align-items: center; gap: 7px; padding: 0 12px; background: var(--surface-paper); border-bottom: 1px solid var(--border); font-size: 12px; color: var(--ink-muted); }
+  .titlebar .dot { width: 11px; height: 11px; border-radius: 50%; background: var(--border-strong); }
+  .titlebar .title { flex: 1; text-align: center; margin-right: 50px; }
+  .win-body { flex: 1; min-height: 0; display: flex; }
+
+  /* ---- shared pieces ---- */
+  .wordmark { font-family: 'Leitura', serif; font-style: italic; font-size: 19px; color: var(--ink); white-space: nowrap; }
+  .view-title { font-size: 17px; font-weight: 900; margin: 0; }
+  .view-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
+  .view-head .sub { color: var(--ink-muted); font-size: 12.5px; }
+  .scroll { overflow-y: auto; min-height: 0; }
+
+  .filter { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 12px; }
+  .filter input { flex: 1 1 180px; min-width: 0; height: 32px; padding: 0 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); color: var(--ink); font-family: inherit; }
+  .chip { border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 3px 10px; font-size: 12px; cursor: pointer; white-space: nowrap; }
+  .chip.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-soft-ink); font-weight: 600; }
+  .chip.untagged { border-style: dashed; }
+
+  .add-row { display: flex; gap: 6px; margin-bottom: 8px; }
+  .add-row input { flex: 1; height: 34px; padding: 0 10px; border: 1px dashed var(--border-strong); border-radius: 7px; background: transparent; color: var(--ink); font-family: inherit; }
+
+  .task { display: flex; align-items: center; gap: 10px; padding: 8px 8px; border-bottom: 1px solid var(--border); }
+  .task:last-child { border-bottom: none; }
+  .task .grip { color: var(--ink-muted); cursor: grab; font-size: 12px; letter-spacing: -2px; }
+  .task .body { flex: 1; min-width: 0; }
+  .task .text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .task .tags { display: flex; gap: 4px; margin-top: 3px; flex-wrap: wrap; }
+  .tag { font-size: 10.5px; background: var(--surface-overlay); border: 1px solid var(--border); color: var(--ink-secondary); padding: 0 6px; border-radius: 4px; }
+  .task.current { background: var(--accent-soft); border-radius: 7px; }
+  .task .meta { color: var(--ink-muted); font-size: 11.5px; white-space: nowrap; }
+  .icon-btn { border: 1px solid var(--border); background: var(--surface); border-radius: 7px; height: 28px; min-width: 28px; padding: 0 8px; cursor: pointer; font-size: 12px; }
+  .icon-btn:hover { background: var(--surface-overlay); }
+  .icon-btn.play { background: var(--accent); color: var(--ink-on-accent); border-color: var(--accent); font-weight: 900; }
+  .icon-btn.play:hover { background: var(--accent-pressed); }
+  .icon-btn:disabled { opacity: .35; cursor: not-allowed; }
+  .empty-msg { color: var(--ink-muted); padding: 14px 8px; font-size: 13px; }
+
+  .btn { border: 1px solid var(--border-strong); background: var(--surface); border-radius: 8px; padding: 7px 14px; cursor: pointer; font-weight: 600; }
+  .btn:hover { background: var(--surface-overlay); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--ink-on-accent); }
+  .btn.primary:hover { background: var(--accent-pressed); }
+  .btn.ghost { border-color: transparent; background: transparent; color: var(--ink-secondary); }
+  .btn.small { padding: 4px 10px; font-size: 12px; }
+  .btns { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+
+  .phase { font-size: 11px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+  .phase.brk { color: var(--break); }
+  .phase.idle { color: var(--ink-muted); }
+  .ask { background: var(--notice-bg); border: 1px solid var(--notice-border); color: var(--notice-ink); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; }
+
+  /* history */
+  .month-nav { display: flex; align-items: center; justify-content: center; gap: 14px; margin-bottom: 10px; }
+  .month-nav h2 { font-family: 'Leitura', serif; font-style: italic; font-weight: 400; font-size: 20px; margin: 0; min-width: 190px; text-align: center; }
+  .weekdays, .grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
+  .weekdays { margin-bottom: 5px; font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-muted); text-align: center; }
+  .cell { border: 1px solid var(--border); border-radius: 7px; height: 44px; padding: 4px 5px; position: relative; font-size: 11px; color: var(--ink-muted); }
+  .cell.empty { border: none; }
+  .cell.act { cursor: pointer; }
+  .cell.today { box-shadow: inset 0 0 0 2px var(--ink); }
+  .cell.sel { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .cell .cnt { position: absolute; right: 5px; bottom: 3px; font-weight: 900; font-size: 10.5px; }
+  .h1 { background: var(--heat-1); } .h2 { background: var(--heat-2); color: var(--ink); }
+  .h3 { background: var(--heat-3); color: var(--heat-3-ink); } .h4 { background: var(--heat-4); color: var(--heat-4-ink); }
+  .strip { margin-top: 12px; border-top: 1px dashed var(--border); padding-top: 10px; }
+  .strip h3 { font-size: 13.5px; margin: 0 0 6px; }
+  .row { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .row:last-child { border-bottom: none; }
+  .row .m { color: var(--ink-muted); font-size: 12px; white-space: nowrap; }
+
+  /* ring */
+  .ring { position: relative; display: grid; place-items: center; }
+  .ring svg { transform: rotate(-90deg); }
+  .ring .track { stroke: var(--surface-overlay); }
+  .ring .prog { stroke: var(--accent); transition: stroke-dashoffset .3s; }
+  .ring.brk .prog { stroke: var(--break); }
+  .ring .center { position: absolute; text-align: center; }
+  .clock { font-weight: 900; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+
+  /* ---------- Variant A: rail + persistent timer bar ---------- */
+  .A-rail { flex: 0 0 86px; border-right: 1px solid var(--border); background: var(--surface-paper); display: flex; flex-direction: column; align-items: stretch; padding: 12px 8px; gap: 4px; }
+  .A-rail .logo { font-family: 'Leitura', serif; font-style: italic; text-align: center; font-size: 22px; margin-bottom: 14px; }
+  .A-rail button { border: none; background: transparent; border-radius: 9px; padding: 9px 4px 7px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 11px; color: var(--ink-secondary); }
+  .A-rail button .ico { font-size: 18px; line-height: 1; }
+  .A-rail button:hover { background: var(--surface-overlay); }
+  .A-rail button.on { background: var(--accent-soft); color: var(--accent-soft-ink); font-weight: 600; }
+  .A-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .A-timerbar { flex: 0 0 auto; display: flex; align-items: center; gap: 14px; padding: 10px 18px; border-bottom: 1px solid var(--border); background: var(--surface); }
+  .A-timerbar .clock { font-size: 30px; }
+  .A-timerbar .info { flex: 1; min-width: 0; }
+  .A-timerbar .info .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+  .A-timerbar .bar { height: 4px; background: var(--surface-overlay); border-radius: 2px; margin-top: 6px; overflow: hidden; }
+  .A-timerbar .bar i { display: block; height: 100%; background: var(--accent); }
+  .A-timerbar.brk .bar i { background: var(--break); }
+  .A-timerbar.brk { background: var(--break-soft); }
+  .A-content { flex: 1; padding: 16px 18px; }
+
+  /* ---------- Variant B: timer panel + tabs ---------- */
+  .B-left { flex: 0 0 300px; border-right: 1px solid var(--border); background: var(--surface-paper); display: flex; flex-direction: column; align-items: center; padding: 18px 18px; gap: 14px; }
+  .B-left .wordmark { align-self: flex-start; }
+  .B-left .task-name { text-align: center; font-weight: 600; min-height: 38px; text-wrap: balance; }
+  .B-left .today { margin-top: auto; width: 100%; border-top: 1px solid var(--border); padding-top: 10px; font-size: 12.5px; color: var(--ink-secondary); display: flex; justify-content: space-between; }
+  .B-right { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .B-tabs { display: flex; gap: 2px; padding: 0 16px; border-bottom: 1px solid var(--border); }
+  .B-tabs button { border: none; background: none; padding: 12px 14px 10px; cursor: pointer; border-bottom: 2px solid transparent; color: var(--ink-secondary); }
+  .B-tabs button.on { border-bottom-color: var(--accent); color: var(--ink); font-weight: 600; }
+  .B-tabs .count { font-size: 11px; color: var(--ink-muted); margin-left: 4px; }
+  .B-content { flex: 1; padding: 14px 16px; }
+
+  /* ---------- Variant C: separate screens ---------- */
+  .C-wrap { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .C-head { display: flex; align-items: center; gap: 16px; padding: 10px 18px; border-bottom: 1px solid var(--border); }
+  .C-head nav { display: flex; gap: 4px; margin-left: auto; }
+  .C-head nav button { border: 1px solid transparent; background: none; border-radius: 8px; padding: 6px 12px; cursor: pointer; color: var(--ink-secondary); position: relative; }
+  .C-head nav button.on { border-color: var(--border); background: var(--surface-overlay); color: var(--ink); font-weight: 600; }
+  .C-head nav .live { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); margin-left: 6px; vertical-align: middle; animation: pulse 1.2s infinite; }
+  .C-head nav .live.brk { background: var(--break); }
+  @keyframes pulse { 50% { opacity: .3; } }
+  .C-content { flex: 1; padding: 16px 22px; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-left: auto; }
+  .seg button { border: none; background: var(--surface); padding: 5px 12px; cursor: pointer; font-size: 12.5px; color: var(--ink-secondary); }
+  .seg button.on { background: var(--accent-soft); color: var(--accent-soft-ink); font-weight: 600; }
+  .C-focus { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 20px; }
+  .C-focus.brk { background: var(--break-soft); }
+  .C-focus .task-name { font-size: 18px; font-weight: 600; text-align: center; max-width: 520px; text-wrap: balance; }
+  .C-focus .back { align-self: flex-start; }
+
+  /* ---------- switcher (prototype tooling, not part of the design) ---------- */
+  .switcher { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; background: #111; color: #fff; padding: 8px 10px; border-radius: 999px; box-shadow: 0 8px 24px rgba(0,0,0,.35); font-size: 13px; z-index: 30; }
+  .switcher button { border: none; background: rgba(255,255,255,.16); color: inherit; width: 27px; height: 27px; border-radius: 50%; cursor: pointer; font-size: 14px; }
+  .switcher button:hover { background: rgba(255,255,255,.28); }
+  .switcher .label { min-width: 230px; text-align: center; }
+  .switcher .label small { display: block; opacity: .65; font-size: 10.5px; }
+  .switcher .speed { width: auto; border-radius: 999px; padding: 0 10px; font-size: 11px; }
+</style>
+</head>
+<body>
+
+<div class="prototype-banner">
+  <strong>Prototipo — ticket #11.</strong> ¿Cómo se organiza la ventana principal y dónde vive el timer? Tres variantes (flechas ← → o la barra de abajo). Probá: iniciar un Pomodoro con ▶ y <em>después navegar a Archivadas o Historial</em> para ver qué pasa con el timer. El timer corre acelerado (1 s = 1 min). Datos de ejemplo, todo en memoria.
+</div>
+<div class="statebar" id="statebar"></div>
+
+<div class="window">
+  <div class="titlebar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="title">Pomodoro Collective</span></div>
+  <div class="win-body" id="app"></div>
+</div>
+
+<div class="switcher">
+  <button id="prevVariant" aria-label="Variante anterior">‹</button>
+  <div class="label" id="variantLabel"></div>
+  <button id="nextVariant" aria-label="Variante siguiente">›</button>
+  <button class="speed" id="skipPhase" title="Terminar la fase actual ya (como si el tiempo se agotara)">⏩ fin de fase</button>
+</div>
+
+<script>
+// ================= sample data =================
+const TAGS = ["trabajo", "estudio", "cliente", "personal"];
+let nextId = 100;
+const S = {
+  view: "active",            // active | archived | history | focus (C only)
+  query: "",
+  selTags: new Set(),        // tag names, plus "__none__" = Sin etiqueta
+  selectedDay: 23,
+  completedCount: 3,         // global counter of completed Pomodoros (every 5th -> long break)
+  todayCount: 2,
+  tasks: [
+    { id: 1, text: "Preparar presentación cliente", tags: ["trabajo", "cliente"], status: "active" },
+    { id: 2, text: "Revisar PRs pendientes", tags: ["trabajo"], status: "active" },
+    { id: 3, text: "Estudiar Rust — capítulo 8 (ownership avanzado)", tags: ["estudio"], status: "active" },
+    { id: 4, text: "Planificar sprint", tags: ["trabajo"], status: "active" },
+    { id: 5, text: "Ordenar fotos del viaje", tags: [], status: "active" },
+    { id: 6, text: "Pagar impuestos", tags: ["personal"], status: "active" },
+    { id: 7, text: "Escribir informe trimestral", tags: ["trabajo"], status: "archived" },
+    { id: 8, text: "Curso de SQL", tags: ["estudio"], status: "archived" },
+  ],
+  // timer (in-memory, per #4 spec, simplified)
+  t: { phase: "idle", paused: false, taskId: null, total: 25, remaining: 25, elapsed: 0, breakKind: null },
+};
+const HISTORY = {
+  2: [["Escribir informe trimestral", 3, 75]], 3: [["Revisar PRs pendientes", 2, 50], ["Escribir informe trimestral", 1, 25]],
+  7: [["Preparar presentación cliente", 4, 100], ["Estudiar Rust", 1, 25]], 8: [["Preparar presentación cliente", 2, 50], ["Planificar sprint", 1, 25]],
+  9: [["Planificar sprint", 2, 50], ["Estudiar Rust", 2, 47]], 14: [["Preparar presentación cliente", 5, 125], ["Revisar PRs pendientes", 1, 25], ["Planificar sprint", 1, 8]],
+  15: [["Curso de SQL", 1, 25]], 18: [["Estudiar Rust", 3, 68]], 21: [["Revisar PRs pendientes", 2, 50], ["Planificar sprint", 2, 45]],
+  22: [["Planificar sprint", 1, 25]], 23: [["Preparar presentación cliente", 1, 25], ["Revisar PRs pendientes", 1, 25]],
+};
+const TODAY = 23;
+
+// ================= helpers =================
+const esc = s => s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const taskById = id => S.tasks.find(t => t.id === id);
+const fmtClock = m => `${String(Math.floor(m)).padStart(2, "0")}:00`;
+const fmtMin = m => (m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`);
+const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
+
+// filter_tasks(tasks, name_query, selected_tags): AND name/tags, OR within tags (per #6)
+function filterTasks(list) {
+  const q = S.query.trim().toLowerCase();
+  return list.filter(t => {
+    if (q && !t.text.toLowerCase().includes(q)) return false;
+    if (!S.selTags.size) return true;
+    return [...S.selTags].some(tag => (tag === "__none__" ? t.tags.length === 0 : t.tags.includes(tag)));
+  });
+}
+const activeTasks = () => S.tasks.filter(t => t.status === "active");
+const archivedTasks = () => S.tasks.filter(t => t.status === "archived");
+
+// ================= timer model =================
+const busy = () => S.t.phase !== "idle" && S.t.phase !== "ready";
+function startPomodoro(taskId) {
+  S.t = { phase: "pomodoro", paused: false, taskId, total: 25, remaining: 25, elapsed: 0, breakKind: null };
+  if (variant === "C") S.view = "focus";
+  render();
+}
+function finishPomodoro() {
+  S.completedCount++; S.todayCount++;
+  const long = S.completedCount % 5 === 0;
+  const len = long ? 15 : 5;
+  S.t = { ...S.t, phase: "break", paused: false, total: len, remaining: len, breakKind: long ? "largo" : "corto" };
+  render();
+}
+function finishBreak() { S.t = { ...S.t, phase: "ready", paused: false, remaining: 0 }; render(); }
+function stopPomodoro() { S.t = { ...S.t, phase: "asking", paused: true }; render(); }
+function answerLog(yes) {
+  // yes: partial time would be logged; completed counter untouched either way (#4)
+  S.t = { phase: "idle", paused: false, taskId: S.t.taskId, total: 25, remaining: 25, elapsed: 0, breakKind: null };
+  render();
+}
+function skipBreak() { S.t = { ...S.t, phase: "ready", remaining: 0 }; render(); }
+function togglePause() { S.t.paused = !S.t.paused; render(); }
+function phaseEnd() {
+  if (S.t.phase === "pomodoro") finishPomodoro();
+  else if (S.t.phase === "break") finishBreak();
+}
+setInterval(() => {
+  if ((S.t.phase === "pomodoro" || S.t.phase === "break") && !S.t.paused) {
+    S.t.remaining--; S.t.elapsed++;
+    if (S.t.remaining <= 0) phaseEnd(); else render();
+  }
+}, 1000);
+
+function phaseLabel() {
+  const t = S.t;
+  if (t.phase === "idle") return ["idle", "Listo para empezar"];
+  if (t.phase === "ready") return ["idle", "Descanso terminado — listo para el próximo"];
+  if (t.phase === "asking") return ["", "Pomodoro detenido"];
+  if (t.phase === "break") return ["brk", `Descanso ${t.breakKind}${t.paused ? " · en pausa" : ""}`];
+  return ["", `Pomodoro${t.paused ? " · en pausa" : " en curso"}`];
+}
+function timerTaskText() {
+  const task = taskById(S.t.taskId);
+  return task ? task.text : "Elegí una tarea y apretá ▶";
+}
+// controls shared by all variants
+function timerControls(small) {
+  const t = S.t, c = small ? " small" : "";
+  if (t.phase === "asking") return `<div class="ask">¿Registrar ${t.elapsed} min de este Pomodoro interrumpido? <span class="btns" style="display:inline-flex;margin-left:6px"><button class="btn primary small" data-act="log-yes">Registrar</button><button class="btn small" data-act="log-no">Descartar</button></span></div>`;
+  if (t.phase === "pomodoro") return `<div class="btns"><button class="btn${c}" data-act="pause">${t.paused ? "Reanudar" : "Pausar"}</button><button class="btn ghost${c}" data-act="stop">Detener</button></div>`;
+  if (t.phase === "break") return `<div class="btns"><button class="btn${c}" data-act="pause">${t.paused ? "Reanudar" : "Pausar"}</button><button class="btn ghost${c}" data-act="skip">Saltar descanso</button></div>`;
+  if (t.phase === "ready" && taskById(t.taskId)?.status === "active") return `<div class="btns"><button class="btn primary${c}" data-act="again">▶ Otro Pomodoro</button></div>`;
+  return "";
+}
+function ring(size, stroke) {
+  const r = (size - stroke) / 2, circ = 2 * Math.PI * r;
+  const frac = S.t.phase === "pomodoro" || S.t.phase === "break" || S.t.phase === "asking" ? S.t.remaining / S.t.total : 1;
+  const [cls, label] = phaseLabel();
+  const clock = S.t.phase === "ready" ? "00:00" : fmtClock(S.t.remaining);
+  return `<div class="ring ${cls}"><svg width="${size}" height="${size}">
+      <circle class="track" cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke-width="${stroke}"/>
+      <circle class="prog" cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke-width="${stroke}" stroke-linecap="round" stroke-dasharray="${circ}" stroke-dashoffset="${circ * (1 - frac)}"/>
+    </svg><div class="center"><div class="clock" style="font-size:${Math.round(size / 4.4)}px">${clock}</div><div class="phase ${cls}">${label}</div></div></div>`;
+}
+
+// ================= shared view pieces =================
+function filterBar() {
+  const chips = TAGS.map(tag => `<button class="chip ${S.selTags.has(tag) ? "on" : ""}" data-tag="${tag}">${tag}</button>`).join("");
+  return `<div class="filter">
+    <input id="q" type="search" placeholder="Filtrar por nombre…" value="${esc(S.query)}">
+    ${chips}<button class="chip untagged ${S.selTags.has("__none__") ? "on" : ""}" data-tag="__none__">Sin etiqueta</button>
+  </div>`;
+}
+function taskRow(t, mode) {
+  const current = S.t.taskId === t.id && busy();
+  const tags = t.tags.map(g => `<span class="tag">${g}</span>`).join("");
+  const actions = mode === "active"
+    ? `<button class="icon-btn play" data-start="${t.id}" ${busy() ? "disabled" : ""} title="Iniciar Pomodoro">▶</button><button class="icon-btn" data-archive="${t.id}" title="Archivar">Archivar</button>`
+    : `<button class="icon-btn" data-unarchive="${t.id}">Desarchivar</button><button class="icon-btn" data-delete="${t.id}" title="Solo si no tiene Pomodoros">Borrar</button>`;
+  return `<div class="task ${current ? "current" : ""}">
+    ${mode === "active" ? `<span class="grip" title="Arrastrar para reordenar">⋮⋮</span>` : ""}
+    <div class="body"><div class="text">${esc(t.text)}</div>${tags ? `<div class="tags">${tags}</div>` : ""}</div>
+    ${current ? `<span class="meta">en curso</span>` : ""}${actions}</div>`;
+}
+function taskList(mode) {
+  const src = mode === "active" ? activeTasks() : archivedTasks();
+  const list = filterTasks(src);
+  const add = mode === "active" ? `<div class="add-row"><input id="newTask" maxlength="200" placeholder="＋ Nueva tarea (Enter)"></div>` : "";
+  const rows = list.map(t => taskRow(t, mode)).join("") ||
+    `<div class="empty-msg">${src.length ? "Ninguna tarea coincide con el filtro." : mode === "active" ? "No hay tareas activas." : "No hay tareas archivadas."}</div>`;
+  return add + rows;
+}
+function historyView() {
+  const first = (new Date(2026, 8, 1).getDay() + 6) % 7;
+  let cells = "";
+  for (let i = 0; i < first; i++) cells += `<div class="cell empty"></div>`;
+  for (let d = 1; d <= 30; d++) {
+    const rows = HISTORY[d] || [], n = rows.reduce((s, r) => s + r[1], 0);
+    const h = n === 0 ? "" : n <= 2 ? "h1" : n <= 4 ? "h2" : n <= 6 ? "h3" : "h4";
+    cells += `<div class="cell ${h} ${n ? "act" : ""} ${d === TODAY ? "today" : ""} ${d === S.selectedDay ? "sel" : ""}" data-day="${d}">${d}${n ? `<span class="cnt">${n}</span>` : ""}</div>`;
+  }
+  const rows = HISTORY[S.selectedDay] || [];
+  const total = rows.reduce((s, r) => s + r[1], 0);
+  const strip = rows.length
+    ? `<h3>${S.selectedDay} de Septiembre — ${plural(total, "Pomodoro")}</h3>` + rows.map(r => `<div class="row"><span>${r[0]}</span><span class="m">${plural(r[1], "Pomodoro")} · ${fmtMin(r[2])}</span></div>`).join("")
+    : `<div class="empty-msg">Sin Pomodoros ese día.</div>`;
+  return `<div class="month-nav"><button class="icon-btn" data-proto>‹</button><h2>Septiembre 2026</h2><button class="icon-btn" data-proto>›</button></div>
+    <div class="weekdays">${["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"].map(w => `<div>${w}</div>`).join("")}</div>
+    <div class="grid">${cells}</div><div class="strip">${strip}</div>`;
+}
+function viewBody(view) {
+  if (view === "history") return historyView();
+  if (view === "archived") return filterBar() + taskList("archived");
+  return filterBar() + taskList("active");
+}
+
+// ================= Variant A: rail + persistent timer bar =================
+function renderA() {
+  if (S.view === "focus") S.view = "active";
+  const nav = [["active", "☰", "Tareas"], ["archived", "▤", "Archivadas"], ["history", "▦", "Historial"]]
+    .map(([k, ico, l]) => `<button class="${S.view === k ? "on" : ""}" data-view="${k}"><span class="ico">${ico}</span>${l}</button>`).join("");
+  const [cls, label] = phaseLabel();
+  const frac = busy() ? 1 - S.t.remaining / S.t.total : 0;
+  const clock = S.t.phase === "ready" ? "00:00" : fmtClock(S.t.remaining);
+  const titles = { active: ["Tareas activas", plural(activeTasks().length, "tarea")], archived: ["Archivadas", plural(archivedTasks().length, "tarea")], history: ["Historial", `${S.completedCount} completados en total`] };
+  const [title, sub] = titles[S.view];
+  return `<aside class="A-rail"><div class="logo">pc</div>${nav}</aside>
+    <div class="A-main">
+      <div class="A-timerbar ${cls}">
+        <div class="clock">${clock}</div>
+        <div class="info"><div class="phase ${cls}">${label}</div><div class="t">${esc(timerTaskText())}</div><div class="bar"><i style="width:${frac * 100}%"></i></div></div>
+        ${timerControls(true)}
+      </div>
+      <div class="A-content scroll">
+        <div class="view-head"><h1 class="view-title">${title}</h1><span class="sub">${sub}</span></div>
+        ${viewBody(S.view)}
+      </div>
+    </div>`;
+}
+
+// ================= Variant B: timer panel + tabs =================
+function renderB() {
+  if (S.view === "focus") S.view = "active";
+  const tabs = [["active", "Activas", activeTasks().length], ["archived", "Archivadas", archivedTasks().length], ["history", "Historial", null]]
+    .map(([k, l, n]) => `<button class="${S.view === k ? "on" : ""}" data-view="${k}">${l}${n !== null ? `<span class="count num">${n}</span>` : ""}</button>`).join("");
+  return `<section class="B-left">
+      <div class="wordmark">Pomodoro Collective</div>
+      ${ring(210, 12)}
+      <div class="task-name">${esc(timerTaskText())}</div>
+      ${timerControls(false)}
+      <div class="today"><span>Hoy</span><span class="num">${plural(S.todayCount, "Pomodoro")} · próximo largo en ${5 - (S.completedCount % 5)}</span></div>
+    </section>
+    <section class="B-right">
+      <div class="B-tabs">${tabs}</div>
+      <div class="B-content scroll">${viewBody(S.view)}</div>
+    </section>`;
+}
+
+// ================= Variant C: separate screens, timer only in Focus =================
+function renderC() {
+  const live = busy() ? `<span class="live ${S.t.phase === "break" ? "brk" : ""}"></span>` : "";
+  const onTasks = S.view === "active" || S.view === "archived";
+  const nav = `<nav>
+      <button class="${onTasks ? "on" : ""}" data-view="active">Tareas</button>
+      <button class="${S.view === "focus" ? "on" : ""}" data-view="focus">Foco${live}</button>
+      <button class="${S.view === "history" ? "on" : ""}" data-view="history">Historial</button></nav>`;
+  let content;
+  if (S.view === "focus") {
+    const [cls] = phaseLabel();
+    content = `<div class="C-focus ${cls}">
+      ${ring(300, 14)}
+      <div class="task-name">${esc(timerTaskText())}</div>
+      ${timerControls(false)}
+      <div class="phase idle">${plural(S.todayCount, "Pomodoro")} hoy · próximo descanso largo en ${5 - (S.completedCount % 5)}</div>
+    </div>`;
+  } else if (onTasks) {
+    const seg = `<div class="seg"><button class="${S.view === "active" ? "on" : ""}" data-view="active">Activas ${activeTasks().length}</button><button class="${S.view === "archived" ? "on" : ""}" data-view="archived">Archivadas ${archivedTasks().length}</button></div>`;
+    content = `<div class="C-content scroll"><div class="view-head"><h1 class="view-title">Tareas</h1>${seg}</div>${viewBody(S.view)}</div>`;
+  } else {
+    content = `<div class="C-content scroll"><div class="view-head"><h1 class="view-title">Historial</h1></div>${historyView()}</div>`;
+  }
+  return `<div class="C-wrap"><header class="C-head"><span class="wordmark">Pomodoro Collective</span>${nav}</header>${content}</div>`;
+}
+
+// ================= render + wiring =================
+const VARIANTS = [
+  { key: "A", name: "Rail lateral + barra de timer persistente", render: renderA },
+  { key: "B", name: "Split: panel de timer fijo + pestañas", render: renderB },
+  { key: "C", name: "Pantallas separadas: timer solo en «Foco»", render: renderC },
+];
+let variant = new URLSearchParams(location.search).get("variant") || "A";
+if (!VARIANTS.some(v => v.key === variant)) variant = "A";
+
+function render() {
+  const focusId = document.activeElement?.id, caret = document.activeElement?.selectionStart;
+  const v = VARIANTS.find(v => v.key === variant);
+  document.getElementById("app").innerHTML = v.render();
+  document.getElementById("variantLabel").innerHTML = `${v.key} <small>${v.name}</small>`;
+  const tags = [...S.selTags].map(t => (t === "__none__" ? "sin-etiqueta" : t)).join("|") || "∅";
+  document.getElementById("statebar").innerHTML =
+    `<span>vista: <b>${S.view}</b></span><span>timer: <b>${S.t.phase}${S.t.paused ? " (pausa)" : ""}</b> ${busy() ? fmtClock(S.t.remaining) : ""}</span>` +
+    `<span>tarea: <b>${S.t.taskId ? esc(taskById(S.t.taskId)?.text.slice(0, 28) || "-") : "-"}</b></span>` +
+    `<span>filtro: <b>"${esc(S.query)}"</b> tags=<b>${tags}</b></span><span>completados: <b>${S.completedCount}</b></span>` +
+    `<span>timer visible ahora: <b>${variant === "C" && S.view !== "focus" ? "no" : "sí"}</b></span>`;
+  if (focusId) { const el = document.getElementById(focusId); if (el) { el.focus(); try { el.setSelectionRange(caret, caret); } catch (e) {} } }
+}
+
+document.getElementById("app").addEventListener("click", e => {
+  const b = e.target.closest("button, .cell.act");
+  if (!b) return;
+  const d = b.dataset;
+  if (d.view) { S.view = d.view; render(); }
+  else if (d.tag) { S.selTags.has(d.tag) ? S.selTags.delete(d.tag) : S.selTags.add(d.tag); render(); }
+  else if (d.start) startPomodoro(Number(d.start));
+  else if (d.archive) {
+    if (S.t.taskId === Number(d.archive) && busy()) return alert("PROTOTIPO: no se archiva la tarea con un Pomodoro en curso.");
+    taskById(Number(d.archive)).status = "archived"; render();
+  }
+  else if (d.unarchive) { const t = taskById(Number(d.unarchive)); S.tasks = S.tasks.filter(x => x !== t).concat([{ ...t, status: "active" }]); render(); }
+  else if (d.delete) { alert("PROTOTIPO: borrado definitivo solo si ningún Pomodoro referencia la Task (#5). Acá se simula rechazado."); }
+  else if (d.day) { S.selectedDay = Number(d.day); render(); }
+  else if ("proto" in d) alert("PROTOTIPO: mockup de un solo mes.");
+  else if (d.act === "pause") togglePause();
+  else if (d.act === "stop") stopPomodoro();
+  else if (d.act === "skip") skipBreak();
+  else if (d.act === "log-yes") answerLog(true);
+  else if (d.act === "log-no") answerLog(false);
+  else if (d.act === "again") startPomodoro(S.t.taskId);
+});
+document.getElementById("app").addEventListener("input", e => { if (e.target.id === "q") { S.query = e.target.value; render(); } });
+document.getElementById("app").addEventListener("keydown", e => {
+  if (e.target.id === "newTask" && e.key === "Enter") {
+    const text = e.target.value.trim();
+    if (!text) return;
+    if (activeTasks().some(t => t.text.toLowerCase() === text.toLowerCase())) return alert("Ya existe una tarea activa con ese texto (#5).");
+    S.tasks.push({ id: nextId++, text, tags: [], status: "active" });
+    e.target.value = ""; render();
+  }
+});
+
+function setVariant(k) {
+  variant = k;
+  const url = new URL(location.href); url.searchParams.set("variant", k); history.replaceState({}, "", url);
+  render();
+}
+function cycle(delta) { const i = VARIANTS.findIndex(v => v.key === variant); setVariant(VARIANTS[(i + delta + VARIANTS.length) % VARIANTS.length].key); }
+document.getElementById("prevVariant").addEventListener("click", () => cycle(-1));
+document.getElementById("nextVariant").addEventListener("click", () => cycle(1));
+document.getElementById("skipPhase").addEventListener("click", phaseEnd);
+document.addEventListener("keydown", e => {
+  const a = document.activeElement;
+  if (a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA" || a.isContentEditable)) return;
+  if (e.key === "ArrowLeft") cycle(-1);
+  if (e.key === "ArrowRight") cycle(1);
+});
+
+render();
+</script>
+</body>
+</html>
