@@ -37,5 +37,5 @@ A user-defined label attached to a Task, used to group and filter Tasks. A Tag h
 _Avoid_: category, label (as a synonym for Tag itself, use Tag)
 
 **History**:
-The day-by-day record of the dedicated time each Task received, viewable by month like a calendar. It includes time from both completed and logged-interrupted Pomodoros.
+The day-by-day record of the dedicated time each Task received, viewable by month like a calendar. It includes time from both completed and logged-interrupted Pomodoros. A Pomodoro belongs, whole, to the local calendar day on which it ended — one that runs past midnight counts on the next day.
 _Avoid_: log, calendar (calendar is the view; History is the record it shows)
