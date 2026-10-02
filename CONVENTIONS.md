@@ -5,8 +5,11 @@ file instead of inferring the project from nearby files.
 
 ## Status
 
-Stack: **Python 3.14 with uv**. Tooling, gates, and a root `pomodoro` package
-placeholder exist; the domain model does not yet. Sections marked **OPEN** below
+Stack: **Python 3.14 with uv** today. The agreed target (spec in issue #12,
+ADR-0001/0002/0003) is a web app in a monorepo: `backend/` (FastAPI, SQLModel +
+Alembic, SQLite locally and PostgreSQL in production) and `frontend/` (Next.js App
+Router, TypeScript, pnpm, Tailwind, Biome). Tooling, gates, and a root `pomodoro`
+package placeholder exist; the domain model does not yet. Sections marked **OPEN** below
 await the product objective. Do not invent them; ask.
 
 ## Commit policy
@@ -127,8 +130,11 @@ higher layer may import lower ones, never the reverse, and `api` is the only
 inbound HTTP boundary. `pyproject.toml` carries a commented `[tool.importlinter]`
 skeleton — uncomment and enforce it once the package actually has layers.
 
-**OPEN** until the objective defines them: the concrete module layout and where
-side effects and I/O are permitted.
+Agreed layout for the backend (ADR-0001, to be enforced once the packages exist):
+`entrypoints` (FastAPI app factory, settings, dependency wiring) -> `api` (per-area
+routers, Pydantic schemas, use cases) -> `database` (SQLModel tables, repositories,
+Alembic) -> `core` (entities, rules, Timer state machine, repository Protocols; no
+framework imports). The package moves under `backend/` when implementation starts.
 
 ## Test strategy
 
