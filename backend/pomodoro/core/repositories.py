@@ -9,7 +9,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
-    from pomodoro.core.entities import Tag, TagId, Task, TaskId, UserId
+    from pomodoro.core.entities import Pomodoro, Tag, TagId, Task, TaskId, UserId
+    from pomodoro.core.timer import Timer
 
 
 @runtime_checkable
@@ -64,4 +65,38 @@ class TaskRepository(Protocol):
 
     def delete(self, user_id: UserId, task_id: TaskId) -> None:
         """Permanently remove the User's Task."""
+        ...
+
+
+@runtime_checkable
+class TimerRepository(Protocol):
+    """Per-User live Timer persistence; every User has exactly one Timer."""
+
+    def get(self, user_id: UserId) -> Timer | None:
+        """Return the User's Timer, or `None` if no row exists yet."""
+        ...
+
+    def save(self, user_id: UserId, timer: Timer) -> None:
+        """Persist the User's Timer, replacing any previous state."""
+        ...
+
+
+@runtime_checkable
+class PomodoroRepository(Protocol):
+    """Pomodoro history persistence, every method scoped to a `UserId`."""
+
+    def add(self, pomodoro: Pomodoro) -> Pomodoro:
+        """Persist a new Pomodoro and return it with its assigned id.
+
+        The `id` on the given Pomodoro is a placeholder; the implementation
+        assigns the real one and returns a new Pomodoro carrying it.
+        """
+        ...
+
+    def count_completed_for_user(self, user_id: UserId) -> int:
+        """Return the User's total count of `completed` Pomodoros."""
+        ...
+
+    def exists_for_task(self, user_id: UserId, task_id: TaskId) -> bool:
+        """Return whether the User's Task has any Pomodoro (any status) recorded."""
         ...

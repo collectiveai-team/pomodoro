@@ -98,3 +98,10 @@ class InvalidPasswordLengthError(DomainError):
             f"La contraseña debe tener entre {MIN_PASSWORD_LENGTH} y "
             f"{MAX_PASSWORD_LENGTH} caracteres."
         )
+
+
+class InvalidTimerActionError(DomainError):
+    """Raised when an action doesn't apply to the Timer's current phase."""
+
+    def __init__(self) -> None:
+        super().__init__("Esa acción no es válida en el estado actual del temporizador.")
