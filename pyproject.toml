@@ -83,17 +83,24 @@ max-complexity = 10
 ban-relative-imports = "all"
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101", "INP001", "S603", "S607"]
+"tests/**" = ["S101", "INP001", "S603", "S607", "S106"]
 # FastAPI routes and Pydantic schemas are introspected at runtime (`get_type_hints`)
 # to build request/response validation, so TC001/TC003 would break them by hiding
 # required imports behind `TYPE_CHECKING` — these annotations are never lazy.
 "backend/pomodoro/api/**" = ["TC001", "TC003"]
+# SQLModel table classes are introspected at runtime the same way, to build columns.
+"backend/pomodoro/database/**" = ["TC001", "TC003"]
 
 # MARK: deptry
 # The import package lives under `backend/` (ADR-0001), not at the repo root, so deptry
 # can't infer it is first-party from directory layout alone.
 [tool.deptry]
 known_first_party = ["pomodoro"]
+
+# psycopg is a PostgreSQL DBAPI driver selected by SQLAlchemy through the
+# `postgresql+psycopg://` URL scheme, never imported directly by our code.
+[tool.deptry.per_rule_ignores]
+DEP002 = ["psycopg"]
 
 # MARK: Pyrefly
 [tool.pyrefly]
@@ -162,6 +169,10 @@ dependencies = [
   "fastapi>=0.115.0",
   "uvicorn>=0.32.0",
   "pydantic>=2.9.0",
+  "sqlmodel>=0.0.47",
+  "alembic>=1.20.0",
+  "psycopg[binary]>=3.3.6",
+  "sqlalchemy>=2.0.54",
 ]
 
 [project.scripts]
