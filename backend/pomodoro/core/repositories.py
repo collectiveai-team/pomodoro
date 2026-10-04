@@ -9,7 +9,28 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
-    from pomodoro.core.entities import Task, TaskId, UserId
+    from pomodoro.core.entities import Tag, TagId, Task, TaskId, UserId
+
+
+@runtime_checkable
+class TagRepository(Protocol):
+    """Tag catalog persistence, every method scoped to a `UserId`."""
+
+    def list(self, user_id: UserId) -> list[Tag]:
+        """Return the User's Tag catalog, including orphaned Tags (zero Tasks)."""
+        ...
+
+    def get_or_create_by_name(self, user_id: UserId, name: str) -> Tag:
+        """Return the User's Tag matching `name`'s normalized key, creating it if absent."""
+        ...
+
+    def rename(self, user_id: UserId, tag_id: TagId, new_name: str) -> Tag:
+        """Rename the User's Tag; the new name is visible on every Task carrying it."""
+        ...
+
+    def delete(self, user_id: UserId, tag_id: TagId) -> None:
+        """Remove the User's Tag from the catalog and from every Task that had it."""
+        ...
 
 
 @runtime_checkable
