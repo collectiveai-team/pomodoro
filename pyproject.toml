@@ -93,6 +93,7 @@ project-excludes = [
   "**/venv/**/*",
   "**/.venv/**/*",
   "**/.uv_cache/**/*",
+  ".worktrees/**",
 ]
 use-ignore-files = false
 disable-project-excludes-heuristics = true
