@@ -48,6 +48,13 @@ class TaskHasPomodorosError(DomainError):
         super().__init__("No se puede borrar una tarea con pomodoros registrados.")
 
 
+class TaskReorderMismatchError(DomainError):
+    """Raised when a reorder's id list doesn't match the User's Active Tasks."""
+
+    def __init__(self) -> None:
+        super().__init__("La lista de reordenamiento no coincide con las tareas activas.")
+
+
 class TaskInProgressError(DomainError):
     """Raised when archiving or deleting the Task the User's Timer is running on."""
 
