@@ -18,7 +18,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 CONVENTIONAL_SUBJECT = re.compile(
     r"^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)"
-    r"(\([a-z0-9._-]+\))?!?: .+"
+    r"(\([A-Za-z0-9._-]+\))?!?: .+"
 )
 EXEMPT_SUBJECT_PREFIXES = ("Merge ", "Revert ", "fixup! ")
 
