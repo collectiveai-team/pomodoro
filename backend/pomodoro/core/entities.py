@@ -17,6 +17,7 @@ UserId = NewType("UserId", int)
 TaskId = NewType("TaskId", int)
 TagId = NewType("TagId", int)
 PomodoroId = NewType("PomodoroId", int)
+AuthSessionId = NewType("AuthSessionId", int)
 
 
 class TaskStatus(Enum):
@@ -75,6 +76,23 @@ class Task:
     def status(self) -> TaskStatus:
         """Derive Active/Archived from `archived_at`."""
         return TaskStatus.ARCHIVED if self.archived_at is not None else TaskStatus.ACTIVE
+
+
+@dataclass(frozen=True)
+class AuthSession:
+    """An opaque login session; only its token's hash is ever stored."""
+
+    id: AuthSessionId
+    user_id: UserId
+    token_hash: str
+    created_at: datetime
+    last_used_at: datetime
+    expires_at: datetime
+
+    def __post_init__(self) -> None:
+        _require_aware(self.created_at, field_name="created_at")
+        _require_aware(self.last_used_at, field_name="last_used_at")
+        _require_aware(self.expires_at, field_name="expires_at")
 
 
 @dataclass(frozen=True)

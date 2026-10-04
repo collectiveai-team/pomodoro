@@ -9,8 +9,75 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
-    from pomodoro.core.entities import Pomodoro, Tag, TagId, Task, TaskId, UserId
+    from datetime import datetime
+
+    from pomodoro.core.auth import UserRecord
+    from pomodoro.core.entities import (
+        AuthSession,
+        AuthSessionId,
+        Pomodoro,
+        Tag,
+        TagId,
+        Task,
+        TaskId,
+        User,
+        UserId,
+    )
     from pomodoro.core.timer import Timer
+
+
+@runtime_checkable
+class UserRepository(Protocol):
+    """User persistence; the one repository not scoped to a `UserId`."""
+
+    def get_by_id(self, user_id: UserId) -> User | None:
+        """Return the User by id, or `None` if it doesn't exist."""
+        ...
+
+    def get_by_email_key(self, email_key: str) -> UserRecord | None:
+        """Return the User and password hash matching `email_key`, or `None`."""
+        ...
+
+    def add(self, user: User, password_hash: str) -> User:
+        """Persist a new User and return it with its assigned id.
+
+        The `id` on the given User is a placeholder; the implementation
+        assigns the real one and returns a new User carrying it.
+        """
+        ...
+
+    def update(self, user: User) -> User:
+        """Persist changes to an existing User and return the stored result."""
+        ...
+
+    def delete(self, user_id: UserId) -> None:
+        """Permanently remove the User and every row that cascades off it."""
+        ...
+
+
+@runtime_checkable
+class AuthSessionRepository(Protocol):
+    """Login-session persistence; only a token's hash is ever stored."""
+
+    def create(self, user_id: UserId, token_hash: str, expires_at: datetime) -> AuthSession:
+        """Persist a new session for `user_id` and return it with its assigned id."""
+        ...
+
+    def get_by_token_hash(self, token_hash: str) -> AuthSession | None:
+        """Return the session matching `token_hash`, or `None` if none does."""
+        ...
+
+    def touch_last_used(self, session_id: AuthSessionId) -> None:
+        """Renew `last_used_at` to the current time for the given session."""
+        ...
+
+    def revoke(self, session_id: AuthSessionId) -> None:
+        """Permanently remove a single session."""
+        ...
+
+    def revoke_all_for_user(self, user_id: UserId) -> None:
+        """Permanently remove every session belonging to `user_id`."""
+        ...
 
 
 @runtime_checkable
