@@ -11,6 +11,7 @@ from pomodoro.api.session import csrf_guard
 from pomodoro.api.session import get_auth_session_repository as get_session_repo_dependency
 from pomodoro.api.session import get_clock as get_session_clock
 from pomodoro.api.session import get_user_repository as get_user_repo_dependency
+from pomodoro.api.tags import router as tags_router
 from pomodoro.api.tasks import get_pomodoro_repository as get_pomodoro_repo_dependency
 from pomodoro.api.tasks import get_tag_repository as get_tag_repo_dependency
 from pomodoro.api.tasks import get_task_repository as get_task_repo_dependency
@@ -43,6 +44,7 @@ def create_app() -> FastAPI:
     app.include_router(health_router)
     app.include_router(auth_router)
     app.include_router(tasks_router)
+    app.include_router(tags_router)
     app.include_router(timer_router)
     app.dependency_overrides[get_health_clock] = RealClock
     app.dependency_overrides[get_session_clock] = RealClock

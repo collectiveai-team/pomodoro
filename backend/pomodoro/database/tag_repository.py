@@ -1,10 +1,8 @@
-"""SQLModel-backed Tag persistence.
+"""SQLModel-backed Tag persistence, implementing the full `TagRepository` Protocol.
 
-Shared prerequisite for T9 (Tasks API): assigning Tags to a Task by name
-requires resolving a name to a `TagId`, creating it if absent. Only the
-methods T9 needs (`list`, `get_or_create_by_name`) are implemented here;
-`rename`/`delete` -- the rest of `pomodoro.core.repositories.TagRepository` --
-are T11's (Tags API) to add.
+`list`/`get_or_create_by_name` were added as a shared prerequisite for T9
+(Tasks API: assigning Tags to a Task by name needs to resolve a name to a
+`TagId`, creating it if absent). `rename`/`delete` are T11's (Tags API).
 """
 
 from __future__ import annotations
@@ -29,7 +27,7 @@ def _to_entity(row: tables.Tag) -> Tag:
 
 
 class SQLTagRepository:
-    """Partial `TagRepository` Protocol implementation backed by a SQLModel engine."""
+    """`TagRepository` Protocol implementation backed by a SQLModel engine."""
 
     def __init__(self, engine: Engine) -> None:
         self._engine = engine
@@ -52,3 +50,23 @@ class SQLTagRepository:
                 session.commit()
                 session.refresh(row)
             return _to_entity(row)
+
+    def rename(self, user_id: UserId, tag_id: TagId, new_name: str) -> Tag:
+        stripped = new_name.strip()
+        with session_scope(self._engine) as session:
+            row = session.get(tables.Tag, tag_id)
+            if row is None or row.user_id != user_id:
+                raise LookupError(f"Tag {tag_id} does not exist")
+            row.name = stripped
+            row.name_key = normalize_key(stripped)
+            session.add(row)
+            session.commit()
+            session.refresh(row)
+            return _to_entity(row)
+
+    def delete(self, user_id: UserId, tag_id: TagId) -> None:
+        with session_scope(self._engine) as session:
+            row = session.get(tables.Tag, tag_id)
+            if row is not None and row.user_id == user_id:
+                session.delete(row)
+                session.commit()
