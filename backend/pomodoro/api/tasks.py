@@ -22,20 +22,25 @@ from pomodoro.core.errors import (
     DuplicateActiveTaskTextError,
     TagNameEmptyError,
     TaskHasPomodorosError,
+    TaskReorderMismatchError,
     TaskTextEmptyError,
     TaskTextTooLongError,
+    UnarchiveCollisionError,
 )
 from pomodoro.core.filtering import SIN_ETIQUETA, filter_tasks
 from pomodoro.core.repositories import PomodoroRepository, TagRepository, TaskRepository
 from pomodoro.core.tags import find_tag_by_name, validate_tag_name
 from pomodoro.core.tasks import (
-    create_task as build_task,
-)
-from pomodoro.core.tasks import (
+    archive_task,
     edit_task_text,
     ensure_task_deletable,
+    reorder_active_tasks,
     sort_active_tasks,
     sort_archived_tasks,
+    unarchive_task,
+)
+from pomodoro.core.tasks import (
+    create_task as build_task,
 )
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
@@ -82,6 +87,19 @@ class EditTaskTagsRequest(BaseModel):
     """Request body for `PATCH /api/tasks/{task_id}/tags`: the full desired Tag set."""
 
     tags: list[str]
+
+
+class ReorderTasksRequest(BaseModel):
+    """Request body for `POST /api/tasks/reorder`: the full desired Active order."""
+
+    task_ids: list[int]
+
+
+class TaskCountsPublic(BaseModel):
+    """Tab counts for the Active/Archived tabs."""
+
+    active: int
+    archived: int
 
 
 class TaskPublic(BaseModel):
@@ -211,6 +229,15 @@ def list_archived_tasks(
     )
 
 
+@router.get("/summary")
+def task_counts(user: UserDep, task_repo: TaskRepoDep) -> TaskCountsPublic:
+    """Return the Active/Archived tab counts."""
+    return TaskCountsPublic(
+        active=len(task_repo.list_active(user.id)),
+        archived=len(task_repo.list_archived(user.id)),
+    )
+
+
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_task(
     body: CreateTaskRequest,
@@ -294,6 +321,65 @@ def edit_tags(
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(error)) from error
 
     stored = task_repo.update(replace(task, tag_ids=tag_ids))
+    catalog = tag_repo.list(user.id)
+    return _to_public(stored, tag_names=_tag_name_index(catalog), pomodoro_repo=pomodoro_repo)
+
+
+@router.post("/reorder")
+def reorder_tasks(
+    body: ReorderTasksRequest,
+    user: UserDep,
+    task_repo: TaskRepoDep,
+    tag_repo: TagRepoDep,
+    pomodoro_repo: PomodoroRepoDep,
+) -> list[TaskPublic]:
+    """Rewrite the User's Active Tasks' positions to match the given full order."""
+    active_tasks = task_repo.list_active(user.id)
+    ordered_ids = [TaskId(task_id) for task_id in body.task_ids]
+    try:
+        reordered = reorder_active_tasks(active_tasks, ordered_ids)
+    except TaskReorderMismatchError as error:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(error)) from error
+
+    stored = [task_repo.update(task) for task in sort_active_tasks(reordered)]
+    catalog = tag_repo.list(user.id)
+    tag_names = _tag_name_index(catalog)
+    return [_to_public(task, tag_names=tag_names, pomodoro_repo=pomodoro_repo) for task in stored]
+
+
+@router.post("/{task_id}/archive")
+def archive_task_route(
+    task_id: int,
+    user: UserDep,
+    task_repo: TaskRepoDep,
+    tag_repo: TagRepoDep,
+    pomodoro_repo: PomodoroRepoDep,
+    clock: ClockDep,
+) -> TaskPublic:
+    """Archive an Active Task, freezing its position."""
+    task = _get_owned_task(task_repo, user, task_id)
+    stored = task_repo.update(archive_task(task, clock.now()))
+    catalog = tag_repo.list(user.id)
+    return _to_public(stored, tag_names=_tag_name_index(catalog), pomodoro_repo=pomodoro_repo)
+
+
+@router.post("/{task_id}/unarchive")
+def unarchive_task_route(
+    task_id: int,
+    user: UserDep,
+    task_repo: TaskRepoDep,
+    tag_repo: TagRepoDep,
+    pomodoro_repo: PomodoroRepoDep,
+) -> TaskPublic:
+    """Unarchive a Task, sending it to the end of the Active list."""
+    task = _get_owned_task(task_repo, user, task_id)
+    active_tasks = task_repo.list_active(user.id)
+    try:
+        unarchived = unarchive_task(task, active_tasks)
+    except UnarchiveCollisionError as error:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(error)) from error
+
+    stored = task_repo.update(unarchived)
     catalog = tag_repo.list(user.id)
     return _to_public(stored, tag_names=_tag_name_index(catalog), pomodoro_repo=pomodoro_repo)
 

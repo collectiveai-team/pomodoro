@@ -7,73 +7,24 @@ visible across threads.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
 import pytest
-from fastapi.testclient import TestClient
-from pomodoro.api import session, tasks
+from pomodoro.api import session
 from pomodoro.database import tables
-from pomodoro.database.auth_session_repository import SQLAuthSessionRepository
 from pomodoro.database.engine import session_scope
-from pomodoro.database.pomodoro_repository import SQLPomodoroRepository
 from pomodoro.database.tables import Pomodoro as PomodoroRow
-from pomodoro.database.tag_repository import SQLTagRepository
-from pomodoro.database.task_repository import SQLTaskRepository
-from pomodoro.database.user_repository import SQLUserRepository
-from pomodoro.entrypoints.app import create_app
 
 from tests.conftest import NOW, TEST_PASSWORD, FakeClock
+from tests.conftest import AuthedSession as _AuthedSession
+from tests.conftest import as_other_user as _as_other_user
+from tests.conftest import authed_session as _authed_session
+from tests.conftest import build_tasks_client as _build_client
 from tests.conftest import http_test_engine as _engine
 
 if TYPE_CHECKING:
     from pathlib import Path
-
-    from sqlalchemy.engine import Engine
-
-
-def _build_client(engine: Engine, clock: FakeClock) -> TestClient:
-    app = create_app()
-    app.dependency_overrides.update(
-        {
-            session.get_clock: lambda: clock,
-            session.get_user_repository: lambda: SQLUserRepository(engine),
-            session.get_auth_session_repository: lambda: SQLAuthSessionRepository(engine, clock),
-            tasks.get_task_repository: lambda: SQLTaskRepository(engine),
-            tasks.get_tag_repository: lambda: SQLTagRepository(engine),
-            tasks.get_pomodoro_repository: lambda: SQLPomodoroRepository(engine),
-        }
-    )
-    return TestClient(app)
-
-
-@dataclass
-class _AuthedSession:
-    """A ready-to-use client plus the state behind its cookie, for one test."""
-
-    client: TestClient
-    clock: FakeClock
-    engine: Engine
-    cookies: dict[str, str]
-    user_id: int
-
-
-def _authed_session(
-    tmp_path: Path, *, email: str = "person@example.com", password: str = TEST_PASSWORD
-) -> _AuthedSession:
-    engine = _engine(tmp_path)
-    clock = FakeClock()
-    client = _build_client(engine, clock)
-    response = client.post(
-        "/api/auth/register",
-        json={"email": email, "password": password, "time_zone": "America/Argentina/Buenos_Aires"},
-    )
-    assert response.status_code == 201
-    cookies = {session.SESSION_COOKIE_NAME: response.cookies[session.SESSION_COOKIE_NAME]}
-    return _AuthedSession(
-        client=client, clock=clock, engine=engine, cookies=cookies, user_id=response.json()["id"]
-    )
 
 
 def _create(s: _AuthedSession, text: str, tags: list[str] | None = None) -> Any:
@@ -95,19 +46,6 @@ def _list_archived(s: _AuthedSession, **params) -> list[dict]:
     response = s.client.get("/api/tasks/archived", cookies=s.cookies, params=params)
     assert response.status_code == 200
     return response.json()
-
-
-def _as_other_user(
-    s: _AuthedSession, *, email: str = "other@example.com"
-) -> tuple[TestClient, dict[str, str]]:
-    """Register a second User sharing `s`'s database and return their own client+cookies."""
-    other_client = _build_client(s.engine, s.clock)
-    register = other_client.post(
-        "/api/auth/register",
-        json={"email": email, "password": TEST_PASSWORD, "time_zone": "UTC"},
-    )
-    cookies = {session.SESSION_COOKIE_NAME: register.cookies[session.SESSION_COOKIE_NAME]}
-    return other_client, cookies
 
 
 def _seed_completed_pomodoro(s: _AuthedSession, task_id: int) -> None:
