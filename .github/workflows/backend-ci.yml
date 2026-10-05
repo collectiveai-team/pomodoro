@@ -1,0 +1,137 @@
+name: backend-ci
+
+# Runs the backend gate suite (CONVENTIONS.md "Code style") plus the deterministic
+# pytest suite on every PR/push touching backend/ or tests/. No test-running CI
+# existed before this workflow — commit-policy/conventional-commits/dependency-review/
+# zizmor only cover commit hygiene and workflow security.
+
+on:
+  pull_request:
+    paths:
+      - "backend/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "alembic.ini"
+      - ".github/workflows/backend-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "alembic.ini"
+      - ".github/workflows/backend-ci.yml"
+
+concurrency:
+  group: backend-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  UV_VERSION: "0.11.12"
+
+jobs:
+  gates:
+    name: gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: $/.github/actions/setup-backend
+        with:
+          uv-version: ${{ env.UV_VERSION }}
+
+      - name: ruff check
+        run: uv run ruff check .
+
+      - name: pyrefly
+        run: uvx pyrefly check --config pyproject.toml
+
+      - name: complexipy (cognitive complexity)
+        run: uvx complexipy --max-complexity-allowed 15 backend tests
+
+      - name: file-size-guard (400 large / 700 enormous)
+        run: |
+          python3 -c "import sys; sys.exit(max([0] + [1 for f in sys.argv[1:] for n in [sum(1 for _ in open(f, errors='ignore'))] if (n >= 700 and not print(f'Error: CES-71 (file-size-guard): {f} is too large ({n} lines, limit is 700)')) or (n >= 400 and not print(f'Warning: CES-71 (file-size-guard): {f} is large ({n} lines, recommended limit is 400)') and False)]))" $(git ls-files '*.py')
+
+      - name: deptry (unused/missing/misplaced dependencies)
+        run: uvx deptry .
+
+      - name: ast-grep
+        run: uvx --from ast-grep-cli ast-grep scan
+
+      - name: import-linter (layered architecture)
+        run: uv run lint-imports
+
+  unit:
+    name: unit (SQLite)
+    needs: gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: $/.github/actions/setup-backend
+        with:
+          uv-version: ${{ env.UV_VERSION }}
+
+      # pytest-randomly (dependency-groups.dev) randomizes test order on every run.
+      # "not integration" is today's equivalent of the `unit` marker suite: no test
+      # currently carries `integration` (none needs PostgreSQL yet), so this already
+      # runs the full deterministic SQLite suite described in Testing Decisions.
+      - name: pytest -m "not integration"
+        run: uv run pytest -m "not integration" -q
+
+  integration:
+    name: integration (PostgreSQL)
+    needs: gates
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: pomodoro
+          POSTGRES_PASSWORD: pomodoro
+          POSTGRES_DB: pomodoro
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pomodoro"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql+psycopg://pomodoro:pomodoro@localhost:5432/pomodoro
+    steps:
+      - uses: $/.github/actions/setup-backend
+        with:
+          uv-version: ${{ env.UV_VERSION }}
+
+      - name: alembic upgrade head (PostgreSQL, from zero)
+        run: uv run alembic upgrade head
+
+      # The existing SQLite tmp_path migrations test (tests/test_database_migrations.py)
+      # runs in the `unit` job instead of here: migrations/env.py's get_url() prefers
+      # $DATABASE_URL over the Alembic Config passed in-process, so running it in this
+      # job (DATABASE_URL pointed at PostgreSQL) would silently migrate PostgreSQL
+      # instead of the test's own tmp_path SQLite file and fail the table-presence
+      # assertion. The `unit` job has no DATABASE_URL set, so it exercises it correctly.
+
+      # Testing Decisions: "si no hay un DATABASE_URL de PostgreSQL, se saltea
+      # limpiamente." Exit 5 means pytest collected zero `integration`-marked
+      # tests (true today — none exist yet) and is treated the same as a clean
+      # skip, not a failure.
+      - name: pytest -m integration
+        run: |
+          if [ -z "${DATABASE_URL:-}" ]; then
+            echo "No PostgreSQL DATABASE_URL configured; skipping integration tests."
+            exit 0
+          fi
+          set +e
+          uv run pytest -m integration -q
+          status=$?
+          set -e
+          if [ "$status" -eq 5 ]; then
+            echo "No integration-marked tests collected yet; treating as a clean skip."
+            exit 0
+          fi
+          exit "$status"
