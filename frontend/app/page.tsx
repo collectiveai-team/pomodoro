@@ -1,4 +1,4 @@
-import { LogoutButton } from "@/src/auth/logout-button";
+import { AccountMenu } from "@/src/account/AccountMenu";
 import { HistoryTab } from "@/src/history/HistoryTab";
 import { ActiveTab } from "@/src/tasks/ActiveTab";
 import { ArchivedTab } from "@/src/tasks/ArchivedTab";
@@ -10,6 +10,7 @@ export default function Home() {
       <h1 className="font-olivetta text-accent text-3xl font-semibold">
         Pomodoro Collective
       </h1>
+      <AccountMenu />
       <TimerPanel />
       <div className="w-full max-w-xl">
         <ActiveTab />
@@ -20,7 +21,6 @@ export default function Home() {
       <div className="w-full max-w-xl">
         <HistoryTab />
       </div>
-      <LogoutButton />
     </main>
   );
 }
