@@ -179,6 +179,7 @@ dependencies = [
 
 [project.scripts]
 pomodoro-api = "pomodoro.entrypoints.app:main"
+pomodoro-export-openapi = "pomodoro.entrypoints.export_openapi:main"
 
 # MARK: Extra deps
 [dependency-groups]

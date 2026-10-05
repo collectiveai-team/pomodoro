@@ -1,0 +1,29 @@
+name: setup-frontend
+description: Checkout the repo and install frontend dependencies with pnpm
+
+inputs:
+  node-version:
+    description: Node.js version to install
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v7
+      with:
+        persist-credentials: false
+
+    - name: Enable corepack
+      shell: bash
+      run: corepack enable
+
+    - uses: actions/setup-node@v7
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: pnpm
+        cache-dependency-path: frontend/pnpm-lock.yaml
+
+    - name: Install dependencies
+      shell: bash
+      working-directory: frontend
+      run: pnpm install --frozen-lockfile
