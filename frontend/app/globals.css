@@ -1,0 +1,24 @@
+@import "tailwindcss";
+@config "../tailwind.config.ts";
+
+/* Light palette (default) */
+:root {
+  --color-bg: #ffffff;
+  --color-ink: #1e1e1e;
+  --color-accent: #8054ff;
+  --color-accent-pressed: #5c3cb9;
+}
+
+/* Dark "darkAlt" palette */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #16131c;
+    --color-ink: #dcd7e6;
+    --color-accent: #a98cff;
+  }
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-ink);
+}
