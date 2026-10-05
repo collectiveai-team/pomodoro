@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from datetime import datetime
 
     from pomodoro.core.entities import Task, TaskId, UserId
+    from pomodoro.core.repositories import PomodoroRepository, TimerRepository
 
 POMODORO_SECONDS = 25 * 60
 SHORT_BREAK_SECONDS = 5 * 60
@@ -145,6 +146,26 @@ def settle(timer: Timer, now: datetime) -> SettleResult:
     if timer.phase is TimerPhase.BREAK_RUNNING:
         return _settle_break(timer, now)
     return SettleResult(timer=timer)
+
+
+def settle_and_persist(
+    timer_repo: TimerRepository,
+    pomodoro_repo: PomodoroRepository,
+    user_id: UserId,
+    now: datetime,
+) -> Timer:
+    """Lazily settle the User's stored Timer and persist any resulting side effects.
+
+    Shared by `api.timer` (every route) and `api.tasks` (the in-progress-Task
+    guard) so neither reimplements settle-then-persist against the stored row.
+    """
+    timer = timer_repo.get(user_id) or idle_timer(user_id)
+    result = settle(timer, now)
+    if result.completed_pomodoro is not None:
+        pomodoro_repo.add(result.completed_pomodoro)
+    if result.timer != timer:
+        timer_repo.save(user_id, result.timer)
+    return result.timer
 
 
 def _settle_pomodoro(timer: Timer, now: datetime) -> SettleResult:

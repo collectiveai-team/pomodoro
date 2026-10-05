@@ -15,16 +15,11 @@ from tests.conftest import FakeClock
 from tests.conftest import as_other_user as _as_other_user
 from tests.conftest import authed_session as _authed_session
 from tests.conftest import build_tasks_client as _build_client
+from tests.conftest import create_task as _create_task
 from tests.conftest import http_test_engine as _engine
 
 if TYPE_CHECKING:
     from pathlib import Path
-
-
-def _create_task(s: _AuthedSession, text: str) -> int:
-    response = s.client.post("/api/tasks", cookies=s.cookies, json={"text": text})
-    assert response.status_code == 201
-    return response.json()["id"]
 
 
 def _get_timer(s: _AuthedSession) -> Any:

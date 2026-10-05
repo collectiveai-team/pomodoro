@@ -14,8 +14,8 @@ from pomodoro.api.session import get_user_repository as get_user_repo_dependency
 from pomodoro.api.tasks import get_pomodoro_repository as get_pomodoro_repo_dependency
 from pomodoro.api.tasks import get_tag_repository as get_tag_repo_dependency
 from pomodoro.api.tasks import get_task_repository as get_task_repo_dependency
+from pomodoro.api.tasks import get_timer_repository as get_timer_repo_dependency
 from pomodoro.api.tasks import router as tasks_router
-from pomodoro.api.timer import get_timer_repository as get_timer_repo_dependency
 from pomodoro.api.timer import router as timer_router
 from pomodoro.database.auth_session_repository import SQLAuthSessionRepository
 from pomodoro.database.engine import create_db_engine

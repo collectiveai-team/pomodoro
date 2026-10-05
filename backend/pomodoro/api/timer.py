@@ -17,7 +17,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
 from pomodoro.api.session import get_clock, require_session
-from pomodoro.api.tasks import NOT_FOUND_ERROR, get_pomodoro_repository, get_task_repository
+from pomodoro.api.tasks import (
+    NOT_FOUND_ERROR,
+    get_pomodoro_repository,
+    get_task_repository,
+    get_timer_repository,
+)
 from pomodoro.core.clock import Clock
 from pomodoro.core.entities import Task, TaskId, User
 from pomodoro.core.errors import InvalidTimerActionError, TaskNotActiveError
@@ -29,14 +34,13 @@ from pomodoro.core.timer import (
     active_seconds,
     break_duration_seconds,
     discard,
-    idle_timer,
     local_day_bounds_utc,
     log,
     next_pomodoro,
     pause,
     pomodoros_until_long_break,
     resume,
-    settle,
+    settle_and_persist,
     skip_break,
     start_break,
     start_on_task,
@@ -46,14 +50,7 @@ from pomodoro.core.timer import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from pomodoro.core.entities import UserId
-
 router = APIRouter(prefix="/api/timer", tags=["timer"])
-
-
-def get_timer_repository() -> TimerRepository:
-    """Stand in for the TimerRepository dependency until the app factory overrides it."""
-    raise NotImplementedError("TimerRepository dependency must be wired by the app factory")
 
 
 UserDep = Annotated[User, Depends(require_session)]
@@ -114,21 +111,6 @@ def _remaining_seconds(timer: Timer, now: datetime) -> int | None:
     return None
 
 
-def _settle_and_persist(
-    timer_repo: TimerRepository,
-    pomodoro_repo: PomodoroRepository,
-    user_id: UserId,
-    now: datetime,
-) -> Timer:
-    timer = timer_repo.get(user_id) or idle_timer(user_id)
-    result = settle(timer, now)
-    if result.completed_pomodoro is not None:
-        pomodoro_repo.add(result.completed_pomodoro)
-    if result.timer != timer:
-        timer_repo.save(user_id, result.timer)
-    return result.timer
-
-
 def _lookup_task(task_repo: TaskRepository, user: User, task_id: TaskId | None) -> Task | None:
     if task_id is None:
         return None
@@ -151,7 +133,7 @@ def _apply_action(
     clock: Clock,
 ) -> TimerPublic:
     now = clock.now()
-    timer = _settle_and_persist(timer_repo, pomodoro_repo, user.id, now)
+    timer = settle_and_persist(timer_repo, pomodoro_repo, user.id, now)
     try:
         updated = action(timer, now)
     except InvalidTimerActionError as error:
@@ -171,7 +153,7 @@ def get_timer(
 ) -> TimerPublic:
     """Return the settled Timer, the in-progress Task, remaining time and the server's `now`."""
     now = clock.now()
-    timer = _settle_and_persist(timer_repo, pomodoro_repo, user.id, now)
+    timer = settle_and_persist(timer_repo, pomodoro_repo, user.id, now)
     task = _lookup_task(task_repo, user, timer.task_id)
     return TimerPublic.build(timer, now, task)
 
@@ -185,7 +167,7 @@ def get_day_summary(
 ) -> DaySummaryPublic:
     """Return today's completed-Pomodoro count and how many more until the next long Break."""
     now = clock.now()
-    _settle_and_persist(timer_repo, pomodoro_repo, user.id, now)
+    settle_and_persist(timer_repo, pomodoro_repo, user.id, now)
     start_utc, end_utc = local_day_bounds_utc(now, user.time_zone)
     completed_today = pomodoro_repo.count_completed_between(user.id, start_utc, end_utc)
     total_completed = pomodoro_repo.count_completed_for_user(user.id)
@@ -206,7 +188,7 @@ def start_timer(
 ) -> TimerPublic:
     """Start a Pomodoro on one of the caller's own Active Tasks."""
     now = clock.now()
-    timer = _settle_and_persist(timer_repo, pomodoro_repo, user.id, now)
+    timer = settle_and_persist(timer_repo, pomodoro_repo, user.id, now)
     task = task_repo.get(user.id, TaskId(body.task_id))
     if task is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, NOT_FOUND_ERROR)
@@ -266,7 +248,7 @@ def log_timer(
 ) -> TimerPublic:
     """AskingToLog + log -> Idle, persisting the interrupted Pomodoro's real time."""
     now = clock.now()
-    timer = _settle_and_persist(timer_repo, pomodoro_repo, user.id, now)
+    timer = settle_and_persist(timer_repo, pomodoro_repo, user.id, now)
     try:
         result = log(timer)
     except InvalidTimerActionError as error:

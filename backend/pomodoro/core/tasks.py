@@ -19,6 +19,7 @@ from pomodoro.core.errors import (
     MAX_TASK_TEXT_LENGTH,
     DuplicateActiveTaskTextError,
     TaskHasPomodorosError,
+    TaskInProgressError,
     TaskReorderMismatchError,
     TaskTextEmptyError,
     TaskTextTooLongError,
@@ -104,8 +105,13 @@ def edit_task_text(task: Task, new_text: str, active_tasks: Sequence[Task]) -> T
     return replace(task, text=stripped)
 
 
-def archive_task(task: Task, archived_at: datetime) -> Task:
-    """Freeze the Task's position and mark it archived."""
+def archive_task(task: Task, archived_at: datetime, *, in_progress: bool = False) -> Task:
+    """Freeze the Task's position and mark it archived.
+
+    Rejects the Task currently referenced by the User's Timer (any non-Idle
+    phase with that `task_id`) -- see `ensure_task_not_in_progress`.
+    """
+    ensure_task_not_in_progress(in_progress=in_progress)
     return replace(task, archived_at=archived_at)
 
 
@@ -137,7 +143,18 @@ def sort_archived_tasks(tasks: Sequence[Task]) -> list[Task]:
     return sorted(tasks, key=lambda task: task.archived_at, reverse=True)  # type: ignore[arg-type,return-value]
 
 
-def ensure_task_deletable(*, has_pomodoros: bool) -> None:
-    """Raise if the Task has any Pomodoro (completed or interrupted-logged) recorded."""
+def ensure_task_not_in_progress(*, in_progress: bool) -> None:
+    """Raise if the Task is the one the User's Timer currently references.
+
+    "In progress" means any non-Idle Timer phase whose `task_id` is this
+    Task's id (the caller computes `in_progress`; this stays framework-free).
+    """
+    if in_progress:
+        raise TaskInProgressError
+
+
+def ensure_task_deletable(*, has_pomodoros: bool, in_progress: bool = False) -> None:
+    """Raise if the Task has any Pomodoro recorded, or the Timer currently references it."""
+    ensure_task_not_in_progress(in_progress=in_progress)
     if has_pomodoros:
         raise TaskHasPomodorosError

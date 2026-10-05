@@ -12,7 +12,7 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from fastapi.testclient import TestClient
-from pomodoro.api import session, tasks, timer
+from pomodoro.api import session, tasks
 from pomodoro.database.auth_session_repository import SQLAuthSessionRepository
 from pomodoro.database.engine import create_db_engine
 from pomodoro.database.pomodoro_repository import SQLPomodoroRepository
@@ -65,7 +65,7 @@ def build_tasks_client(engine: Engine, clock: FakeClock) -> TestClient:
             tasks.get_task_repository: lambda: SQLTaskRepository(engine),
             tasks.get_tag_repository: lambda: SQLTagRepository(engine),
             tasks.get_pomodoro_repository: lambda: SQLPomodoroRepository(engine),
-            timer.get_timer_repository: lambda: SQLTimerRepository(engine),
+            tasks.get_timer_repository: lambda: SQLTimerRepository(engine),
         }
     )
     return TestClient(app)
@@ -101,6 +101,13 @@ def authed_session(
     return AuthedSession(
         client=client, clock=clock, engine=engine, cookies=cookies, user_id=response.json()["id"]
     )
+
+
+def create_task(s: AuthedSession, text: str) -> int:
+    """Create a Task through the API and return its id, for tests that need one to exist."""
+    response = s.client.post("/api/tasks", cookies=s.cookies, json={"text": text})
+    assert response.status_code == 201
+    return response.json()["id"]
 
 
 def as_other_user(

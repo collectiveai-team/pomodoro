@@ -22,13 +22,19 @@ from pomodoro.core.errors import (
     DuplicateActiveTaskTextError,
     TagNameEmptyError,
     TaskHasPomodorosError,
+    TaskInProgressError,
     TaskReorderMismatchError,
     TaskTextEmptyError,
     TaskTextTooLongError,
     UnarchiveCollisionError,
 )
 from pomodoro.core.filtering import SIN_ETIQUETA, filter_tasks
-from pomodoro.core.repositories import PomodoroRepository, TagRepository, TaskRepository
+from pomodoro.core.repositories import (
+    PomodoroRepository,
+    TagRepository,
+    TaskRepository,
+    TimerRepository,
+)
 from pomodoro.core.tags import find_tag_by_name, validate_tag_name
 from pomodoro.core.tasks import (
     archive_task,
@@ -42,6 +48,7 @@ from pomodoro.core.tasks import (
 from pomodoro.core.tasks import (
     create_task as build_task,
 )
+from pomodoro.core.timer import settle_and_persist
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 
@@ -61,10 +68,21 @@ def get_pomodoro_repository() -> PomodoroRepository:
     raise NotImplementedError("PomodoroRepository dependency must be wired by the app factory")
 
 
+def get_timer_repository() -> TimerRepository:
+    """Stand in for the TimerRepository dependency until the app factory overrides it.
+
+    Owned here (rather than `api.timer`) so the Task/Timer guard below can
+    depend on it without an import cycle; `api.timer` imports it from here,
+    the same way it already imports `get_task_repository`/`get_pomodoro_repository`.
+    """
+    raise NotImplementedError("TimerRepository dependency must be wired by the app factory")
+
+
 UserDep = Annotated[User, Depends(require_session)]
 TaskRepoDep = Annotated[TaskRepository, Depends(get_task_repository)]
 TagRepoDep = Annotated[TagRepository, Depends(get_tag_repository)]
 PomodoroRepoDep = Annotated[PomodoroRepository, Depends(get_pomodoro_repository)]
+TimerRepoDep = Annotated[TimerRepository, Depends(get_timer_repository)]
 ClockDep = Annotated[Clock, Depends(get_clock)]
 
 NOT_FOUND_ERROR = "La tarea no existe."
@@ -167,17 +185,42 @@ def _resolve_or_create_tag_ids(
     return tuple(ids)
 
 
-def _is_deletable(pomodoro_repo: PomodoroRepository, user_id: UserId, task_id: TaskId) -> bool:
+def _settled_in_progress_task_id(
+    timer_repo: TimerRepository, pomodoro_repo: PomodoroRepository, user_id: UserId, now: datetime
+) -> TaskId | None:
+    """Return the Task id the User's settled Timer currently references, or `None` if Idle.
+
+    Shares `api.timer`'s lazy settle-before-read rule via `core.timer.settle_and_persist`
+    rather than trusting a possibly-stale stored Timer row.
+    """
+    return settle_and_persist(timer_repo, pomodoro_repo, user_id, now).task_id
+
+
+def _is_deletable(
+    pomodoro_repo: PomodoroRepository,
+    user_id: UserId,
+    task_id: TaskId,
+    *,
+    in_progress_task_id: TaskId | None,
+) -> bool:
+    if task_id == in_progress_task_id:
+        return False
     return not pomodoro_repo.exists_for_task(user_id, task_id)
 
 
 def _to_public(
-    task: Task, *, tag_names: _TagNameIndex, pomodoro_repo: PomodoroRepository
+    task: Task,
+    *,
+    tag_names: _TagNameIndex,
+    pomodoro_repo: PomodoroRepository,
+    in_progress_task_id: TaskId | None,
 ) -> TaskPublic:
     return TaskPublic.from_entity(
         task,
         tag_names=tag_names,
-        deletable=_is_deletable(pomodoro_repo, task.user_id, task.id),
+        deletable=_is_deletable(
+            pomodoro_repo, task.user_id, task.id, in_progress_task_id=in_progress_task_id
+        ),
     )
 
 
@@ -188,11 +231,20 @@ def _filtered_response(
     tags: list[str],
     catalog: list[Tag],
     pomodoro_repo: PomodoroRepository,
+    in_progress_task_id: TaskId | None,
 ) -> list[TaskPublic]:
     selected = _resolve_selected_tags(tags, catalog)
     filtered = filter_tasks(tasks, text, selected)
     tag_names = _tag_name_index(catalog)
-    return [_to_public(task, tag_names=tag_names, pomodoro_repo=pomodoro_repo) for task in filtered]
+    return [
+        _to_public(
+            task,
+            tag_names=tag_names,
+            pomodoro_repo=pomodoro_repo,
+            in_progress_task_id=in_progress_task_id,
+        )
+        for task in filtered
+    ]
 
 
 @router.get("/active")
@@ -201,14 +253,24 @@ def list_active_tasks(
     task_repo: TaskRepoDep,
     tag_repo: TagRepoDep,
     pomodoro_repo: PomodoroRepoDep,
+    timer_repo: TimerRepoDep,
+    clock: ClockDep,
     tags: Annotated[list[str], Query(default_factory=list)],
     text: str = "",
 ) -> list[TaskPublic]:
     """Return the User's Active Tasks (newest first), filtered by `filter_tasks`."""
     active = sort_active_tasks(task_repo.list_active(user.id))
     catalog = tag_repo.list(user.id)
+    in_progress_task_id = _settled_in_progress_task_id(
+        timer_repo, pomodoro_repo, user.id, clock.now()
+    )
     return _filtered_response(
-        active, text=text, tags=tags, catalog=catalog, pomodoro_repo=pomodoro_repo
+        active,
+        text=text,
+        tags=tags,
+        catalog=catalog,
+        pomodoro_repo=pomodoro_repo,
+        in_progress_task_id=in_progress_task_id,
     )
 
 
@@ -221,11 +283,20 @@ def list_archived_tasks(
     tags: Annotated[list[str], Query(default_factory=list)],
     text: str = "",
 ) -> list[TaskPublic]:
-    """Return the User's Archived Tasks (most recently archived first), filtered."""
+    """Return the User's Archived Tasks (most recently archived first), filtered.
+
+    Never "in progress" (the Timer guard only applies to Active Tasks, and an
+    Archived Task can't be started on in the first place), so no Timer lookup.
+    """
     archived = sort_archived_tasks(task_repo.list_archived(user.id))
     catalog = tag_repo.list(user.id)
     return _filtered_response(
-        archived, text=text, tags=tags, catalog=catalog, pomodoro_repo=pomodoro_repo
+        archived,
+        text=text,
+        tags=tags,
+        catalog=catalog,
+        pomodoro_repo=pomodoro_repo,
+        in_progress_task_id=None,
     )
 
 
@@ -270,7 +341,12 @@ def create_task(
 
     stored = task_repo.add(draft)
     catalog = tag_repo.list(user.id)
-    return _to_public(stored, tag_names=_tag_name_index(catalog), pomodoro_repo=pomodoro_repo)
+    return _to_public(
+        stored,
+        tag_names=_tag_name_index(catalog),
+        pomodoro_repo=pomodoro_repo,
+        in_progress_task_id=None,
+    )
 
 
 def _get_owned_task(task_repo: TaskRepository, user: User, task_id: int) -> Task:
@@ -278,6 +354,27 @@ def _get_owned_task(task_repo: TaskRepository, user: User, task_id: int) -> Task
     if task is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, NOT_FOUND_ERROR)
     return task
+
+
+def _store_and_respond(
+    task: Task,
+    *,
+    task_repo: TaskRepository,
+    tag_repo: TagRepository,
+    pomodoro_repo: PomodoroRepository,
+    timer_repo: TimerRepository,
+    user_id: UserId,
+    now: datetime,
+) -> TaskPublic:
+    stored = task_repo.update(task)
+    catalog = tag_repo.list(user_id)
+    in_progress_task_id = _settled_in_progress_task_id(timer_repo, pomodoro_repo, user_id, now)
+    return _to_public(
+        stored,
+        tag_names=_tag_name_index(catalog),
+        pomodoro_repo=pomodoro_repo,
+        in_progress_task_id=in_progress_task_id,
+    )
 
 
 @router.patch("/{task_id}/text")
@@ -288,6 +385,8 @@ def edit_text(
     task_repo: TaskRepoDep,
     tag_repo: TagRepoDep,
     pomodoro_repo: PomodoroRepoDep,
+    timer_repo: TimerRepoDep,
+    clock: ClockDep,
 ) -> TaskPublic:
     """Edit a Task's text, applying the same validation `create` uses."""
     task = _get_owned_task(task_repo, user, task_id)
@@ -299,9 +398,15 @@ def edit_text(
     except (TaskTextEmptyError, TaskTextTooLongError) as error:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(error)) from error
 
-    stored = task_repo.update(updated)
-    catalog = tag_repo.list(user.id)
-    return _to_public(stored, tag_names=_tag_name_index(catalog), pomodoro_repo=pomodoro_repo)
+    return _store_and_respond(
+        updated,
+        task_repo=task_repo,
+        tag_repo=tag_repo,
+        pomodoro_repo=pomodoro_repo,
+        timer_repo=timer_repo,
+        user_id=user.id,
+        now=clock.now(),
+    )
 
 
 @router.patch("/{task_id}/tags")
@@ -312,6 +417,8 @@ def edit_tags(
     task_repo: TaskRepoDep,
     tag_repo: TagRepoDep,
     pomodoro_repo: PomodoroRepoDep,
+    timer_repo: TimerRepoDep,
+    clock: ClockDep,
 ) -> TaskPublic:
     """Replace a Task's Tag assignments with the given set of names."""
     task = _get_owned_task(task_repo, user, task_id)
@@ -320,9 +427,15 @@ def edit_tags(
     except TagNameEmptyError as error:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(error)) from error
 
-    stored = task_repo.update(replace(task, tag_ids=tag_ids))
-    catalog = tag_repo.list(user.id)
-    return _to_public(stored, tag_names=_tag_name_index(catalog), pomodoro_repo=pomodoro_repo)
+    return _store_and_respond(
+        replace(task, tag_ids=tag_ids),
+        task_repo=task_repo,
+        tag_repo=tag_repo,
+        pomodoro_repo=pomodoro_repo,
+        timer_repo=timer_repo,
+        user_id=user.id,
+        now=clock.now(),
+    )
 
 
 @router.post("/reorder")
@@ -332,6 +445,8 @@ def reorder_tasks(
     task_repo: TaskRepoDep,
     tag_repo: TagRepoDep,
     pomodoro_repo: PomodoroRepoDep,
+    timer_repo: TimerRepoDep,
+    clock: ClockDep,
 ) -> list[TaskPublic]:
     """Rewrite the User's Active Tasks' positions to match the given full order."""
     active_tasks = task_repo.list_active(user.id)
@@ -344,7 +459,18 @@ def reorder_tasks(
     stored = [task_repo.update(task) for task in sort_active_tasks(reordered)]
     catalog = tag_repo.list(user.id)
     tag_names = _tag_name_index(catalog)
-    return [_to_public(task, tag_names=tag_names, pomodoro_repo=pomodoro_repo) for task in stored]
+    in_progress_task_id = _settled_in_progress_task_id(
+        timer_repo, pomodoro_repo, user.id, clock.now()
+    )
+    return [
+        _to_public(
+            task,
+            tag_names=tag_names,
+            pomodoro_repo=pomodoro_repo,
+            in_progress_task_id=in_progress_task_id,
+        )
+        for task in stored
+    ]
 
 
 @router.post("/{task_id}/archive")
@@ -354,13 +480,30 @@ def archive_task_route(
     task_repo: TaskRepoDep,
     tag_repo: TagRepoDep,
     pomodoro_repo: PomodoroRepoDep,
+    timer_repo: TimerRepoDep,
     clock: ClockDep,
 ) -> TaskPublic:
-    """Archive an Active Task, freezing its position."""
+    """Archive an Active Task, freezing its position.
+
+    Rejected while the User's Timer is running/paused/pending-log/on-break on
+    this Task (user story #31): see `ensure_task_not_in_progress`.
+    """
     task = _get_owned_task(task_repo, user, task_id)
-    stored = task_repo.update(archive_task(task, clock.now()))
+    now = clock.now()
+    in_progress_task_id = _settled_in_progress_task_id(timer_repo, pomodoro_repo, user.id, now)
+    try:
+        archived = archive_task(task, now, in_progress=task.id == in_progress_task_id)
+    except TaskInProgressError as error:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(error)) from error
+
+    stored = task_repo.update(archived)
     catalog = tag_repo.list(user.id)
-    return _to_public(stored, tag_names=_tag_name_index(catalog), pomodoro_repo=pomodoro_repo)
+    return _to_public(
+        stored,
+        tag_names=_tag_name_index(catalog),
+        pomodoro_repo=pomodoro_repo,
+        in_progress_task_id=in_progress_task_id,
+    )
 
 
 @router.post("/{task_id}/unarchive")
@@ -371,7 +514,11 @@ def unarchive_task_route(
     tag_repo: TagRepoDep,
     pomodoro_repo: PomodoroRepoDep,
 ) -> TaskPublic:
-    """Unarchive a Task, sending it to the end of the Active list."""
+    """Unarchive a Task, sending it to the end of the Active list.
+
+    An Archived Task is never the one the Timer references (starting a
+    Pomodoro requires an Active Task), so no Timer lookup is needed here.
+    """
     task = _get_owned_task(task_repo, user, task_id)
     active_tasks = task_repo.list_active(user.id)
     try:
@@ -381,7 +528,12 @@ def unarchive_task_route(
 
     stored = task_repo.update(unarchived)
     catalog = tag_repo.list(user.id)
-    return _to_public(stored, tag_names=_tag_name_index(catalog), pomodoro_repo=pomodoro_repo)
+    return _to_public(
+        stored,
+        tag_names=_tag_name_index(catalog),
+        pomodoro_repo=pomodoro_repo,
+        in_progress_task_id=None,
+    )
 
 
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -390,12 +542,21 @@ def delete_task(
     user: UserDep,
     task_repo: TaskRepoDep,
     pomodoro_repo: PomodoroRepoDep,
+    timer_repo: TimerRepoDep,
+    clock: ClockDep,
 ) -> None:
-    """Permanently delete a Task, only if it has zero Pomodoros."""
+    """Permanently delete a Task, only if it has zero Pomodoros and isn't in progress."""
     task = _get_owned_task(task_repo, user, task_id)
     has_pomodoros = pomodoro_repo.exists_for_task(user.id, task.id)
+    in_progress_task_id = _settled_in_progress_task_id(
+        timer_repo, pomodoro_repo, user.id, clock.now()
+    )
     try:
-        ensure_task_deletable(has_pomodoros=has_pomodoros)
+        ensure_task_deletable(
+            has_pomodoros=has_pomodoros, in_progress=task.id == in_progress_task_id
+        )
+    except TaskInProgressError as error:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(error)) from error
     except TaskHasPomodorosError as error:
         raise HTTPException(status.HTTP_409_CONFLICT, str(error)) from error
 
