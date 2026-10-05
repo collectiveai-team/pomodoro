@@ -111,6 +111,7 @@ project-excludes = [
   "**/.venv/**/*",
   "**/.uv_cache/**/*",
   ".worktrees/**",
+  ".orquestalite/**",
 ]
 use-ignore-files = false
 disable-project-excludes-heuristics = true
