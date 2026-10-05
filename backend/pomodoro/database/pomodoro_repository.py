@@ -5,7 +5,9 @@ T9 (Tasks API) added `exists_for_task` as a shared prerequisite for the
 the `pomodoro.core.repositories.PomodoroRepository` Protocol here with `add`
 (persisting a completed/interrupted-logged Pomodoro), `count_completed_for_user`
 (the Break-cadence counter) and `count_completed_between` (the day summary's
-timezone-bucketed "completed today" count).
+timezone-bucketed "completed today" count). T15 (core History rule) adds
+`list_between`, fetching every Pomodoro in a UTC range for monthly/day
+aggregation.
 """
 
 from __future__ import annotations
@@ -13,9 +15,9 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
-from sqlmodel import func, select
+from sqlmodel import col, func, select
 
-from pomodoro.core.entities import Pomodoro, PomodoroId, PomodoroStatus
+from pomodoro.core.entities import Pomodoro, PomodoroId, PomodoroStatus, TaskId, UserId
 from pomodoro.database import tables
 from pomodoro.database.engine import session_scope
 
@@ -24,13 +26,23 @@ if TYPE_CHECKING:
 
     from sqlalchemy.engine import Engine
 
-    from pomodoro.core.entities import TaskId, UserId
-
 
 def _require_row_id(row: tables.Pomodoro) -> int:
     if row.id is None:
         raise AssertionError
     return row.id
+
+
+def _to_entity(row: tables.Pomodoro) -> Pomodoro:
+    return Pomodoro(
+        id=PomodoroId(_require_row_id(row)),
+        user_id=UserId(row.user_id),
+        task_id=TaskId(row.task_id),
+        started_at=row.started_at,
+        ended_at=row.ended_at,
+        duration_seconds=row.duration_seconds,
+        status=PomodoroStatus(row.status),
+    )
 
 
 class SQLPomodoroRepository:
@@ -86,3 +98,16 @@ class SQLPomodoroRepository:
                 )
             ).first()
             return row is not None
+
+    def list_between(self, user_id: UserId, start: datetime, end: datetime) -> list[Pomodoro]:
+        with session_scope(self._engine) as session:
+            rows = session.exec(
+                select(tables.Pomodoro)
+                .where(
+                    tables.Pomodoro.user_id == user_id,
+                    tables.Pomodoro.ended_at >= start,
+                    tables.Pomodoro.ended_at < end,
+                )
+                .order_by(col(tables.Pomodoro.ended_at))
+            ).all()
+            return [_to_entity(row) for row in rows]

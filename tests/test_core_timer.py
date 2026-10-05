@@ -459,6 +459,9 @@ class FakePomodoroRepository:
     def exists_for_task(self, user_id: UserId, task_id: TaskId) -> bool:
         return any(p.user_id == user_id and p.task_id == task_id for p in self._pomodoros)
 
+    def list_between(self, user_id: UserId, start: datetime, end: datetime) -> list[Pomodoro]:
+        return [p for p in self._pomodoros if p.user_id == user_id and start <= p.ended_at < end]
+
 
 def test_fake_timer_repository_satisfies_the_protocol() -> None:
     repo: TimerRepository = FakeTimerRepository()

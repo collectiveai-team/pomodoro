@@ -183,3 +183,11 @@ class PomodoroRepository(Protocol):
     def exists_for_task(self, user_id: UserId, task_id: TaskId) -> bool:
         """Return whether the User's Task has any Pomodoro (any status) recorded."""
         ...
+
+    def list_between(self, user_id: UserId, start: datetime, end: datetime) -> list[Pomodoro]:
+        """Return the User's Pomodoros (any status) with `ended_at` in `[start, end)`.
+
+        Ordered by `ended_at`, ascending. Feeds History's monthly heatmap and
+        day detail aggregation.
+        """
+        ...
