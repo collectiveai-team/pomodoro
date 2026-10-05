@@ -176,6 +176,10 @@ class PomodoroRepository(Protocol):
         """Return the User's total count of `completed` Pomodoros."""
         ...
 
+    def count_completed_between(self, user_id: UserId, start: datetime, end: datetime) -> int:
+        """Return the User's count of `completed` Pomodoros with `ended_at` in `[start, end)`."""
+        ...
+
     def exists_for_task(self, user_id: UserId, task_id: TaskId) -> bool:
         """Return whether the User's Task has any Pomodoro (any status) recorded."""
         ...

@@ -447,6 +447,15 @@ class FakePomodoroRepository:
             if p.user_id == user_id and p.status is PomodoroStatus.COMPLETED
         )
 
+    def count_completed_between(self, user_id: UserId, start: datetime, end: datetime) -> int:
+        return sum(
+            1
+            for p in self._pomodoros
+            if p.user_id == user_id
+            and p.status is PomodoroStatus.COMPLETED
+            and start <= p.ended_at < end
+        )
+
     def exists_for_task(self, user_id: UserId, task_id: TaskId) -> bool:
         return any(p.user_id == user_id and p.task_id == task_id for p in self._pomodoros)
 

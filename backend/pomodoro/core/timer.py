@@ -9,17 +9,18 @@ that resolves a phase that has already elapsed.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from datetime import timedelta
+from datetime import UTC, timedelta
 from enum import Enum
 from typing import TYPE_CHECKING
+from zoneinfo import ZoneInfo
 
 from pomodoro.core.entities import Pomodoro, PomodoroId, PomodoroStatus
-from pomodoro.core.errors import InvalidTimerActionError
+from pomodoro.core.errors import InvalidTimerActionError, TaskNotActiveError
 
 if TYPE_CHECKING:
     from datetime import datetime
 
-    from pomodoro.core.entities import TaskId, UserId
+    from pomodoro.core.entities import Task, TaskId, UserId
 
 POMODORO_SECONDS = 25 * 60
 SHORT_BREAK_SECONDS = 5 * 60
@@ -196,6 +197,13 @@ def start(timer: Timer, task_id: TaskId, now: datetime) -> Timer:
     )
 
 
+def start_on_task(timer: Timer, task: Task, now: datetime) -> Timer:
+    """Idle + start(task) -> PomodoroRunning, rejecting a Task that isn't Active."""
+    if task.archived_at is not None:
+        raise TaskNotActiveError
+    return start(timer, task.id, now)
+
+
 def pause(timer: Timer, now: datetime) -> Timer:
     """PomodoroRunning<->PomodoroPaused or BreakRunning<->BreakPaused (pause half)."""
     _require_phase(timer, TimerPhase.POMODORO_RUNNING, TimerPhase.BREAK_RUNNING)
@@ -295,3 +303,22 @@ def next_pomodoro(timer: Timer, now: datetime) -> Timer:
         accumulated_active_seconds=0,
         running_since=now,
     )
+
+
+def pomodoros_until_long_break(total_completed: int) -> int:
+    """Return how many more completed Pomodoros are needed to earn the next long Break."""
+    return LONG_BREAK_EVERY - (total_completed % LONG_BREAK_EVERY)
+
+
+def local_day_bounds_utc(now: datetime, time_zone: str) -> tuple[datetime, datetime]:
+    """Return the `[start, end)` UTC instants covering `now`'s local calendar day.
+
+    Used for the day summary's "completed today" count: a Pomodoro belongs to
+    the local day of its `ended_at`, per the User's `time_zone`, computed in
+    Python with `zoneinfo` rather than any engine-specific SQL.
+    """
+    zone = ZoneInfo(time_zone)
+    local_now = now.astimezone(zone)
+    start_local = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+    end_local = start_local + timedelta(days=1)
+    return start_local.astimezone(UTC), end_local.astimezone(UTC)

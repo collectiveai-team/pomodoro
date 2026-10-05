@@ -112,3 +112,10 @@ class InvalidTimerActionError(DomainError):
 
     def __init__(self) -> None:
         super().__init__("Esa acción no es válida en el estado actual del temporizador.")
+
+
+class TaskNotActiveError(DomainError):
+    """Raised when starting a Pomodoro on a Task that isn't one of the caller's Active Tasks."""
+
+    def __init__(self) -> None:
+        super().__init__("Solo se puede iniciar un pomodoro en una tarea activa.")

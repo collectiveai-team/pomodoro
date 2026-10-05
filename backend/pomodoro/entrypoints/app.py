@@ -15,11 +15,14 @@ from pomodoro.api.tasks import get_pomodoro_repository as get_pomodoro_repo_depe
 from pomodoro.api.tasks import get_tag_repository as get_tag_repo_dependency
 from pomodoro.api.tasks import get_task_repository as get_task_repo_dependency
 from pomodoro.api.tasks import router as tasks_router
+from pomodoro.api.timer import get_timer_repository as get_timer_repo_dependency
+from pomodoro.api.timer import router as timer_router
 from pomodoro.database.auth_session_repository import SQLAuthSessionRepository
 from pomodoro.database.engine import create_db_engine
 from pomodoro.database.pomodoro_repository import SQLPomodoroRepository
 from pomodoro.database.tag_repository import SQLTagRepository
 from pomodoro.database.task_repository import SQLTaskRepository
+from pomodoro.database.timer_repository import SQLTimerRepository
 from pomodoro.database.user_repository import SQLUserRepository
 from pomodoro.entrypoints.clock import RealClock
 from pomodoro.entrypoints.settings import get_settings
@@ -40,6 +43,7 @@ def create_app() -> FastAPI:
     app.include_router(health_router)
     app.include_router(auth_router)
     app.include_router(tasks_router)
+    app.include_router(timer_router)
     app.dependency_overrides[get_health_clock] = RealClock
     app.dependency_overrides[get_session_clock] = RealClock
     app.dependency_overrides[get_user_repo_dependency] = lambda: SQLUserRepository(app.state.engine)
@@ -51,6 +55,9 @@ def create_app() -> FastAPI:
     app.dependency_overrides[get_task_repo_dependency] = lambda: SQLTaskRepository(app.state.engine)
     app.dependency_overrides[get_tag_repo_dependency] = lambda: SQLTagRepository(app.state.engine)
     app.dependency_overrides[get_pomodoro_repo_dependency] = lambda: SQLPomodoroRepository(
+        app.state.engine
+    )
+    app.dependency_overrides[get_timer_repo_dependency] = lambda: SQLTimerRepository(
         app.state.engine
     )
     app.middleware("http")(csrf_guard)
