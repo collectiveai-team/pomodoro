@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { SettingsToggles } from "@/src/settings/SettingsToggles";
+import { useSettingsPreferences } from "@/src/settings/useSettingsPreferences";
 import {
   type DaySummary,
   discardTimer,
@@ -94,6 +96,8 @@ function formatClock(totalSeconds: number | null): string {
 
 export function TimerPanel() {
   const engineRef = useRef<TimerEngine | null>(null);
+  const settings = useSettingsPreferences();
+  const latestSnapshotRef = useRef<TimerSnapshot | null>(null);
   const [snapshot, setSnapshot] = useState<TimerSnapshot | null>(null);
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
   const [summary, setSummary] = useState<DaySummary | null>(null);
@@ -117,9 +121,16 @@ export function TimerPanel() {
   useEffect(() => {
     const engine = createTimerEngine({
       onSnapshot: (next) => {
+        latestSnapshotRef.current = next;
         setSnapshot(next);
         setRemainingSeconds(engine.getRemainingSeconds());
         refreshSummary();
+      },
+      onAlarm: () => {
+        const phase = latestSnapshotRef.current
+          ? phaseLabel(latestSnapshotRef.current)
+          : "Pomodoro";
+        settings.triggerPhaseEndEffects(phase);
       },
     });
     engineRef.current = engine;
@@ -128,7 +139,23 @@ export function TimerPanel() {
       engine.dispose();
       engineRef.current = null;
     };
-  }, [refreshSummary]);
+  }, [refreshSummary, settings.triggerPhaseEndEffects]);
+
+  // Unlocks the Alarm's autoplay on the first real user gesture anywhere in
+  // the panel, per the browser's autoplay policy (story 72).
+  useEffect(() => {
+    function handleFirstInteraction(): void {
+      settings.unlockAlarm();
+      window.removeEventListener("pointerdown", handleFirstInteraction);
+      window.removeEventListener("keydown", handleFirstInteraction);
+    }
+    window.addEventListener("pointerdown", handleFirstInteraction);
+    window.addEventListener("keydown", handleFirstInteraction);
+    return () => {
+      window.removeEventListener("pointerdown", handleFirstInteraction);
+      window.removeEventListener("keydown", handleFirstInteraction);
+    };
+  }, [settings.unlockAlarm]);
 
   // Only ticks (and locally decays the displayed countdown) while a phase is
   // actually running; a paused phase's remaining_seconds is already frozen
@@ -333,6 +360,17 @@ export function TimerPanel() {
           </p>
         ) : null}
       </div>
+
+      <SettingsToggles
+        loading={settings.loading}
+        alarmEnabled={settings.alarmEnabled}
+        notificationsEnabled={settings.notificationsEnabled}
+        notificationPermission={settings.notificationPermission}
+        onToggleAlarm={(next) => void settings.setAlarmEnabled(next)}
+        onToggleNotifications={(next) =>
+          void settings.setNotificationsEnabled(next)
+        }
+      />
 
       <footer className="flex w-full justify-between text-sm text-ink/70">
         <span>Hoy: {summary ? summary.completed_today : "–"} completados</span>
