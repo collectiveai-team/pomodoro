@@ -1,0 +1,10 @@
+# Build context for frontend/Dockerfile is this directory. Keep it to
+# source + lockfiles; everything regenerated or irrelevant to the image stays
+# out so it doesn't bust Docker's layer cache or bloat the build context.
+node_modules
+.next
+.tmp
+*.tsbuildinfo
+.git
+Dockerfile
+.dockerignore

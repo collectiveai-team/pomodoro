@@ -1,16 +1,12 @@
 import type { NextConfig } from "next";
 
-const BACKEND_ORIGIN = process.env.BACKEND_ORIGIN ?? "http://127.0.0.1:8000";
-
+// /api/* proxying to the backend is handled by proxy.ts, not here: a
+// `rewrites()` destination is resolved once by `next build` and frozen into
+// .next/routes-manifest.json, so in the standalone Docker image it would bake
+// in whatever BACKEND_ORIGIN happened to be set at build time instead of
+// reading it per-request from the running container's environment.
 const nextConfig: NextConfig = {
-  async rewrites() {
-    return [
-      {
-        source: "/api/:path*",
-        destination: `${BACKEND_ORIGIN}/api/:path*`,
-      },
-    ];
-  },
+  output: "standalone",
 };
 
 export default nextConfig;
