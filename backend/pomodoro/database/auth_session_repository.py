@@ -65,11 +65,12 @@ class SQLAuthSessionRepository:
             ).first()
             return _to_entity(row) if row is not None else None
 
-    def touch_last_used(self, session_id: AuthSessionId) -> None:
+    def touch_last_used(self, session_id: AuthSessionId, *, expires_at: datetime) -> None:
         with session_scope(self._engine) as session:
             row = session.get(tables.AuthSession, session_id)
             if row is not None:
                 row.last_used_at = self._clock.now()
+                row.expires_at = expires_at
                 session.add(row)
                 session.commit()
 

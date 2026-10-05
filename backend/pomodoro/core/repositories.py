@@ -67,8 +67,12 @@ class AuthSessionRepository(Protocol):
         """Return the session matching `token_hash`, or `None` if none does."""
         ...
 
-    def touch_last_used(self, session_id: AuthSessionId) -> None:
-        """Renew `last_used_at` to the current time for the given session."""
+    def touch_last_used(self, session_id: AuthSessionId, *, expires_at: datetime) -> None:
+        """Renew `last_used_at` to the current time and extend `expires_at`.
+
+        The caller (the sliding-expiry policy in `api`) decides the new
+        `expires_at`; this method only persists it alongside the current time.
+        """
         ...
 
     def revoke(self, session_id: AuthSessionId) -> None:

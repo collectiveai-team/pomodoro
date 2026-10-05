@@ -256,11 +256,13 @@ def test_auth_session_repository_touch_last_used_renews_to_current_clock_time() 
     created = session_repo.create(user.id, token_hash="tok-hash", expires_at=NOW)
 
     clock.advance(3600)
-    session_repo.touch_last_used(created.id)
+    new_expires_at = NOW + timedelta(days=30, seconds=3600)
+    session_repo.touch_last_used(created.id, expires_at=new_expires_at)
 
     fetched = session_repo.get_by_token_hash("tok-hash")
     assert fetched is not None
     assert fetched.last_used_at == NOW + timedelta(seconds=3600)
+    assert fetched.expires_at == new_expires_at
     assert fetched.created_at == NOW  # unchanged
 
 
