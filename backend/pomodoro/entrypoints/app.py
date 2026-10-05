@@ -3,6 +3,8 @@
 import uvicorn
 from fastapi import FastAPI
 
+from pomodoro.api.auth import RateLimiter, get_login_rate_limiter, get_register_rate_limiter
+from pomodoro.api.auth import router as auth_router
 from pomodoro.api.health import get_clock as get_health_clock
 from pomodoro.api.health import router as health_router
 from pomodoro.api.session import csrf_guard
@@ -19,20 +21,25 @@ from pomodoro.entrypoints.settings import get_settings
 def create_app() -> FastAPI:
     """Build the FastAPI app with real dependencies wired in.
 
-    `require_session` (used by every later non-auth router) is wired here so
-    those routers only need to depend on it; no router using it is mounted yet
-    beyond `health`.
+    `require_session` is depended on directly by the `auth` router's
+    session-scoped endpoints (logout/me/change-password/delete-account); every
+    later non-auth router will depend on it the same way.
     """
     app = FastAPI(title="Pomodoro Collective API")
     app.state.settings = get_settings()
     app.state.engine = create_db_engine(app.state.settings.database_url)
+    app.state.login_rate_limiter = RateLimiter()
+    app.state.register_rate_limiter = RateLimiter()
     app.include_router(health_router)
+    app.include_router(auth_router)
     app.dependency_overrides[get_health_clock] = RealClock
     app.dependency_overrides[get_session_clock] = RealClock
     app.dependency_overrides[get_user_repo_dependency] = lambda: SQLUserRepository(app.state.engine)
     app.dependency_overrides[get_session_repo_dependency] = lambda: SQLAuthSessionRepository(
         app.state.engine, RealClock()
     )
+    app.dependency_overrides[get_login_rate_limiter] = lambda: app.state.login_rate_limiter
+    app.dependency_overrides[get_register_rate_limiter] = lambda: app.state.register_rate_limiter
     app.middleware("http")(csrf_guard)
     return app
 

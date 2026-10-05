@@ -89,3 +89,15 @@ class SQLAuthSessionRepository:
             for row in rows:
                 session.delete(row)
             session.commit()
+
+    def revoke_all_for_user_except(self, user_id: UserId, keep_session_id: AuthSessionId) -> None:
+        with session_scope(self._engine) as session:
+            rows = session.exec(
+                select(tables.AuthSession).where(
+                    tables.AuthSession.user_id == user_id,
+                    tables.AuthSession.id != keep_session_id,
+                )
+            ).all()
+            for row in rows:
+                session.delete(row)
+            session.commit()

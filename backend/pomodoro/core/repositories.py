@@ -50,6 +50,10 @@ class UserRepository(Protocol):
         """Persist changes to an existing User and return the stored result."""
         ...
 
+    def update_password_hash(self, user_id: UserId, password_hash: str) -> None:
+        """Persist a new Argon2 hash for the User, replacing the previous one."""
+        ...
+
     def delete(self, user_id: UserId) -> None:
         """Permanently remove the User and every row that cascades off it."""
         ...
@@ -81,6 +85,10 @@ class AuthSessionRepository(Protocol):
 
     def revoke_all_for_user(self, user_id: UserId) -> None:
         """Permanently remove every session belonging to `user_id`."""
+        ...
+
+    def revoke_all_for_user_except(self, user_id: UserId, keep_session_id: AuthSessionId) -> None:
+        """Permanently remove every session for `user_id` other than `keep_session_id`."""
         ...
 
 

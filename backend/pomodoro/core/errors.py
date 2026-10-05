@@ -100,6 +100,13 @@ class InvalidPasswordLengthError(DomainError):
         )
 
 
+class IncorrectPasswordError(DomainError):
+    """Raised when a provided password doesn't match the User's current password."""
+
+    def __init__(self) -> None:
+        super().__init__("La contraseña no es correcta.")
+
+
 class InvalidTimerActionError(DomainError):
     """Raised when an action doesn't apply to the Timer's current phase."""
 

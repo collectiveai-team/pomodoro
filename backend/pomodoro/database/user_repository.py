@@ -80,9 +80,41 @@ class SQLUserRepository:
             session.refresh(row)
             return _to_entity(row)
 
+    def update_password_hash(self, user_id: UserId, password_hash: str) -> None:
+        with session_scope(self._engine) as session:
+            row = session.get(tables.User, user_id)
+            if row is None:
+                raise LookupError(f"User {user_id} does not exist")
+            row.password_hash = password_hash
+            session.add(row)
+            session.commit()
+
     def delete(self, user_id: UserId) -> None:
         with session_scope(self._engine) as session:
             row = session.get(tables.User, user_id)
-            if row is not None:
-                session.delete(row)
-                session.commit()
+            if row is None:
+                return
+
+            # Pomodoro and Timer both hold a `task_id` the database enforces as
+            # RESTRICT/NO ACTION, so they must be cleared before Task rows are
+            # deleted; relying on the database to fan the User-id cascade out
+            # across tables in the right order is not guaranteed.
+            for pomodoro in session.exec(
+                select(tables.Pomodoro).where(tables.Pomodoro.user_id == user_id)
+            ).all():
+                session.delete(pomodoro)
+            timer = session.get(tables.Timer, user_id)
+            if timer is not None:
+                session.delete(timer)
+            for task in session.exec(
+                select(tables.Task).where(tables.Task.user_id == user_id)
+            ).all():
+                session.delete(task)
+            for tag in session.exec(select(tables.Tag).where(tables.Tag.user_id == user_id)).all():
+                session.delete(tag)
+            for auth_session in session.exec(
+                select(tables.AuthSession).where(tables.AuthSession.user_id == user_id)
+            ).all():
+                session.delete(auth_session)
+            session.delete(row)
+            session.commit()
