@@ -15,6 +15,7 @@ from pomodoro.core.entities import (
 from pomodoro.core.history import (
     DayCount,
     TaskDaySummary,
+    day_bounds_utc,
     day_detail,
     month_bounds_utc,
     monthly_heatmap,
@@ -76,6 +77,21 @@ def test_month_bounds_utc_rolls_over_into_next_year() -> None:
     start, end = month_bounds_utc(2026, 12, BUENOS_AIRES)
     assert start == datetime(2026, 12, 1, 3, tzinfo=UTC)
     assert end == datetime(2027, 1, 1, 3, tzinfo=UTC)
+
+
+# --- day_bounds_utc ---------------------------------------------------------------
+
+
+def test_day_bounds_utc_covers_the_local_calendar_day() -> None:
+    start, end = day_bounds_utc(date(2026, 1, 5), BUENOS_AIRES)
+    assert start == datetime(2026, 1, 5, 3, tzinfo=UTC)
+    assert end == datetime(2026, 1, 6, 3, tzinfo=UTC)
+
+
+def test_day_bounds_utc_rolls_over_into_the_next_month() -> None:
+    start, end = day_bounds_utc(date(2026, 1, 31), BUENOS_AIRES)
+    assert start == datetime(2026, 1, 31, 3, tzinfo=UTC)
+    assert end == datetime(2026, 2, 1, 3, tzinfo=UTC)
 
 
 # --- monthly_heatmap -------------------------------------------------------------

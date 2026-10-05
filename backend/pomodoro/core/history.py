@@ -8,7 +8,7 @@ computed with `zoneinfo` rather than any engine-specific SQL (story 80).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
@@ -34,6 +34,13 @@ def month_bounds_utc(year: int, month: int, time_zone: str) -> tuple[datetime, d
         else datetime(year, month + 1, 1, tzinfo=zone)
     )
     return start_local.astimezone(UTC), end_local.astimezone(UTC)
+
+
+def day_bounds_utc(local_day: date, time_zone: str) -> tuple[datetime, datetime]:
+    """Return the `[start, end)` UTC instants covering one local calendar day."""
+    zone = ZoneInfo(time_zone)
+    start_local = datetime(local_day.year, local_day.month, local_day.day, tzinfo=zone)
+    return start_local.astimezone(UTC), (start_local + timedelta(days=1)).astimezone(UTC)
 
 
 @dataclass(frozen=True)

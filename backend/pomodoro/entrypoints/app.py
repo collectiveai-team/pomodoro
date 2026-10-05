@@ -7,6 +7,7 @@ from pomodoro.api.auth import RateLimiter, get_login_rate_limiter, get_register_
 from pomodoro.api.auth import router as auth_router
 from pomodoro.api.health import get_clock as get_health_clock
 from pomodoro.api.health import router as health_router
+from pomodoro.api.history import router as history_router
 from pomodoro.api.session import csrf_guard
 from pomodoro.api.session import get_auth_session_repository as get_session_repo_dependency
 from pomodoro.api.session import get_clock as get_session_clock
@@ -48,6 +49,7 @@ def create_app() -> FastAPI:
     app.include_router(tags_router)
     app.include_router(timer_router)
     app.include_router(settings_router)
+    app.include_router(history_router)
     app.dependency_overrides[get_health_clock] = RealClock
     app.dependency_overrides[get_session_clock] = RealClock
     app.dependency_overrides[get_user_repo_dependency] = lambda: SQLUserRepository(app.state.engine)
