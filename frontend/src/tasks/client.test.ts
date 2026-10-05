@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { jsonResponse, stubSameOriginFetch } from "@/src/testing/fetch-stub";
+import {
+  expectRequest,
+  jsonResponse,
+  stubSameOriginFetch,
+} from "@/src/testing/fetch-stub";
 
 async function importTasksClientWithFetch(fetchMock: typeof fetch) {
   stubSameOriginFetch(fetchMock);
@@ -33,11 +37,8 @@ describe("tasks client wrappers", () => {
       tags: ["trabajo", "sin etiqueta"],
     });
 
-    expect(fetchMock).toHaveBeenCalledOnce();
-    const request = fetchMock.mock.calls[0][0] as Request;
+    const request = expectRequest(fetchMock, "GET", "/api/tasks/active");
     const url = new URL(request.url);
-    expect(request.method).toBe("GET");
-    expect(url.pathname).toBe("/api/tasks/active");
     expect(url.searchParams.get("text")).toBe("write");
     expect(url.searchParams.getAll("tags")).toEqual([
       "trabajo",
@@ -54,10 +55,7 @@ describe("tasks client wrappers", () => {
 
     const result = await createTask("Write the panel", ["trabajo"]);
 
-    expect(fetchMock).toHaveBeenCalledOnce();
-    const request = fetchMock.mock.calls[0][0] as Request;
-    expect(request.method).toBe("POST");
-    expect(new URL(request.url).pathname).toBe("/api/tasks");
+    const request = expectRequest(fetchMock, "POST", "/api/tasks");
     expect(request.headers.get("content-type")).toBe("application/json");
     const body = await request.clone().json();
     expect(body).toEqual({ text: "Write the panel", tags: ["trabajo"] });
@@ -88,10 +86,7 @@ describe("tasks client wrappers", () => {
 
     const result = await archiveTask(1);
 
-    expect(fetchMock).toHaveBeenCalledOnce();
-    const request = fetchMock.mock.calls[0][0] as Request;
-    expect(request.method).toBe("POST");
-    expect(new URL(request.url).pathname).toBe("/api/tasks/1/archive");
+    const request = expectRequest(fetchMock, "POST", "/api/tasks/1/archive");
     expect(request.headers.get("content-type")).toBe("application/json");
     expect(result).toEqual({ ok: true, task: TASK_BODY });
   });
@@ -122,10 +117,7 @@ describe("tasks client wrappers", () => {
 
     const result = await reorderTasks([3, 1, 2]);
 
-    expect(fetchMock).toHaveBeenCalledOnce();
-    const request = fetchMock.mock.calls[0][0] as Request;
-    expect(request.method).toBe("POST");
-    expect(new URL(request.url).pathname).toBe("/api/tasks/reorder");
+    const request = expectRequest(fetchMock, "POST", "/api/tasks/reorder");
     const body = await request.clone().json();
     expect(body).toEqual({ task_ids: [3, 1, 2] });
     expect(result).toEqual({ ok: true, tasks: [TASK_BODY] });
@@ -137,10 +129,7 @@ describe("tasks client wrappers", () => {
 
     const result = await editTaskTags(1, ["trabajo", "urgente"]);
 
-    expect(fetchMock).toHaveBeenCalledOnce();
-    const request = fetchMock.mock.calls[0][0] as Request;
-    expect(request.method).toBe("PATCH");
-    expect(new URL(request.url).pathname).toBe("/api/tasks/1/tags");
+    const request = expectRequest(fetchMock, "PATCH", "/api/tasks/1/tags");
     const body = await request.clone().json();
     expect(body).toEqual({ tags: ["trabajo", "urgente"] });
     expect(result).toEqual({ ok: true, task: TASK_BODY });
@@ -153,11 +142,93 @@ describe("tasks client wrappers", () => {
 
     const result = await fetchTagCatalog();
 
-    expect(fetchMock).toHaveBeenCalledOnce();
-    const request = fetchMock.mock.calls[0][0] as Request;
-    expect(request.method).toBe("GET");
-    expect(new URL(request.url).pathname).toBe("/api/tags");
+    expectRequest(fetchMock, "GET", "/api/tags");
     expect(result).toEqual(catalog);
+  });
+
+  it("requests the Archived list with the same text/tags query as Active", async () => {
+    const archivedBody = {
+      ...TASK_BODY,
+      archived_at: "2026-01-02T00:00:00.000Z",
+    };
+    const fetchMock = vi.fn<typeof fetch>(async () =>
+      jsonResponse([archivedBody]),
+    );
+    const { fetchArchivedTasks } = await importTasksClientWithFetch(fetchMock);
+
+    const result = await fetchArchivedTasks({
+      text: "write",
+      tags: ["trabajo", "sin etiqueta"],
+    });
+
+    const request = expectRequest(fetchMock, "GET", "/api/tasks/archived");
+    const url = new URL(request.url);
+    expect(url.searchParams.get("text")).toBe("write");
+    expect(url.searchParams.getAll("tags")).toEqual([
+      "trabajo",
+      "sin etiqueta",
+    ]);
+    expect(result).toEqual({ ok: true, tasks: [archivedBody] });
+  });
+
+  it("unarchives a Task via a body-less POST that still carries Content-Type for csrf_guard", async () => {
+    const fetchMock = vi.fn<typeof fetch>(async () => jsonResponse(TASK_BODY));
+    const { unarchiveTask } = await importTasksClientWithFetch(fetchMock);
+
+    const result = await unarchiveTask(1);
+
+    const request = expectRequest(fetchMock, "POST", "/api/tasks/1/unarchive");
+    expect(request.headers.get("content-type")).toBe("application/json");
+    expect(result).toEqual({ ok: true, task: TASK_BODY });
+  });
+
+  it("surfaces the server's text-collision message when unarchiving conflicts with an Active Task", async () => {
+    const fetchMock = vi.fn<typeof fetch>(async () =>
+      jsonResponse(
+        { detail: "Ya existe una tarea activa con ese texto." },
+        409,
+      ),
+    );
+    const { unarchiveTask } = await importTasksClientWithFetch(fetchMock);
+
+    const result = await unarchiveTask(1);
+
+    expect(result).toEqual({
+      ok: false,
+      status: 409,
+      message: "Ya existe una tarea activa con ese texto.",
+    });
+  });
+
+  it("deletes a Task via a body-less DELETE that still carries Content-Type for csrf_guard", async () => {
+    const fetchMock = vi.fn<typeof fetch>(
+      async () => new Response(null, { status: 204 }),
+    );
+    const { deleteTask } = await importTasksClientWithFetch(fetchMock);
+
+    const result = await deleteTask(1);
+
+    const request = expectRequest(fetchMock, "DELETE", "/api/tasks/1");
+    expect(request.headers.get("content-type")).toBe("application/json");
+    expect(result).toEqual({ ok: true });
+  });
+
+  it("surfaces the server's has-Pomodoros rejection when deleting an undeletable Task", async () => {
+    const fetchMock = vi.fn<typeof fetch>(async () =>
+      jsonResponse(
+        { detail: "No se puede borrar una tarea con Pomodoros registrados." },
+        409,
+      ),
+    );
+    const { deleteTask } = await importTasksClientWithFetch(fetchMock);
+
+    const result = await deleteTask(1);
+
+    expect(result).toEqual({
+      ok: false,
+      status: 409,
+      message: "No se puede borrar una tarea con Pomodoros registrados.",
+    });
   });
 
   it("fetches the tab counts via a real GET request", async () => {
@@ -167,10 +238,7 @@ describe("tasks client wrappers", () => {
 
     const result = await fetchTaskCounts();
 
-    expect(fetchMock).toHaveBeenCalledOnce();
-    const request = fetchMock.mock.calls[0][0] as Request;
-    expect(request.method).toBe("GET");
-    expect(new URL(request.url).pathname).toBe("/api/tasks/summary");
+    expectRequest(fetchMock, "GET", "/api/tasks/summary");
     expect(result).toEqual(counts);
   });
 });

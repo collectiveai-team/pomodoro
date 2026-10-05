@@ -16,20 +16,20 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { startTimer } from "@/src/timer/client";
 import { createTimerEngine, type TimerEngine } from "@/src/timer/engine";
 import {
   archiveTask,
+  createRowActionApplier,
   createTask,
   editTaskTags,
   fetchActiveTasks,
-  fetchTagCatalog,
-  fetchTaskCounts,
   reorderTasks,
   type TaskPublic,
 } from "./client";
 import { TaskFilter } from "./TaskFilter";
+import { useFilteredTaskList } from "./useFilteredTaskList";
 
 /**
  * The Activas tab: counted list, Enter-to-create, text+tag-chip filtering,
@@ -180,14 +180,22 @@ function TaskRow({
 }
 
 export function ActiveTab() {
-  const [tasks, setTasks] = useState<TaskPublic[]>([]);
-  const [activeCount, setActiveCount] = useState<number | null>(null);
-  const [availableTags, setAvailableTags] = useState<string[]>([]);
-  const [textFilter, setTextFilter] = useState("");
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const {
+    tasks,
+    setTasks,
+    count: activeCount,
+    availableTags,
+    textFilter,
+    setTextFilter,
+    selectedTags,
+    toggleTag,
+    listError,
+    setListError,
+    loadCounts,
+    refreshTagCatalog,
+  } = useFilteredTaskList(fetchActiveTasks, "active");
   const [newTaskText, setNewTaskText] = useState("");
   const [creating, setCreating] = useState(false);
-  const [listError, setListError] = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
   const [rowErrors, setRowErrors] = useState<Record<number, string>>({});
   const [timerPhase, setTimerPhase] = useState<string | null>(null);
@@ -204,32 +212,13 @@ export function ActiveTab() {
     }),
   );
 
-  const loadTasks = useCallback(async (): Promise<void> => {
-    const result = await fetchActiveTasks({
-      text: textFilter.trim(),
-      tags: selectedTags,
-    });
-    if (result.ok) {
-      setTasks(result.tasks);
-      setListError(null);
-    } else {
-      setListError(result.message);
-    }
-  }, [textFilter, selectedTags]);
-
-  const loadCounts = useCallback(async (): Promise<void> => {
-    const counts = await fetchTaskCounts();
-    if (counts) {
-      setActiveCount(counts.active);
-    }
-  }, []);
+  const applyRowResult = createRowActionApplier(
+    setTasks,
+    setRowErrors,
+    () => void loadCounts(),
+  );
 
   useEffect(() => {
-    void fetchTagCatalog().then((catalog) =>
-      setAvailableTags(catalog.map((tag) => tag.name)),
-    );
-    void loadCounts();
-
     const engine = createTimerEngine({
       onSnapshot: (snapshot) => {
         setTimerPhase(snapshot.phase);
@@ -242,22 +231,7 @@ export function ActiveTab() {
       engine.dispose();
       engineRef.current = null;
     };
-  }, [loadCounts]);
-
-  useEffect(() => {
-    const handle = setTimeout(() => {
-      void loadTasks();
-    }, 250);
-    return () => clearTimeout(handle);
-  }, [loadTasks]);
-
-  function toggleTag(tag: string): void {
-    setSelectedTags((previous) =>
-      previous.includes(tag)
-        ? previous.filter((existing) => existing !== tag)
-        : [...previous, tag],
-    );
-  }
+  }, []);
 
   async function handleCreate(): Promise<void> {
     const trimmed = newTaskText.trim();
@@ -290,9 +264,7 @@ export function ActiveTab() {
       setTasks((previous) =>
         previous.map((task) => (task.id === taskId ? result.task : task)),
       );
-      void fetchTagCatalog().then((catalog) =>
-        setAvailableTags(catalog.map((tag) => tag.name)),
-      );
+      void refreshTagCatalog();
     } else {
       setRowErrors((previous) => ({ ...previous, [taskId]: result.message }));
     }
@@ -312,13 +284,7 @@ export function ActiveTab() {
   }
 
   async function handleArchive(taskId: number): Promise<void> {
-    const result = await archiveTask(taskId);
-    if (result.ok) {
-      setTasks((previous) => previous.filter((task) => task.id !== taskId));
-      void loadCounts();
-      return;
-    }
-    setRowErrors((previous) => ({ ...previous, [taskId]: result.message }));
+    applyRowResult(taskId, await archiveTask(taskId));
   }
 
   function handleDragEnd(event: DragEndEvent): void {

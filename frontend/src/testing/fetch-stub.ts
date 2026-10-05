@@ -1,4 +1,4 @@
-import { vi } from "vitest";
+import { expect, vi } from "vitest";
 
 /**
  * Shared by every area's `client.test.ts`: `src/api/client.ts` captures
@@ -37,4 +37,21 @@ export function jsonResponse(body: unknown, status = 200): Response {
     status,
     headers: { "Content-Type": "application/json" },
   });
+}
+
+/**
+ * Asserts the mock was called exactly once with the given method/pathname
+ * and returns the captured `Request`, so every area's `client.test.ts` can
+ * assert on its own headers/body without re-deriving this boilerplate.
+ */
+export function expectRequest(
+  fetchMock: ReturnType<typeof vi.fn<typeof fetch>>,
+  method: string,
+  pathname: string,
+): Request {
+  expect(fetchMock).toHaveBeenCalledOnce();
+  const request = fetchMock.mock.calls[0][0] as Request;
+  expect(request.method).toBe(method);
+  expect(new URL(request.url).pathname).toBe(pathname);
+  return request;
 }
