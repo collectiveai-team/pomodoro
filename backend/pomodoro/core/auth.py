@@ -12,12 +12,13 @@ import secrets
 from dataclasses import dataclass
 from hashlib import sha256
 from typing import TYPE_CHECKING
+from zoneinfo import available_timezones
 
 from email_validator import EmailNotValidError
 from email_validator import validate_email as _validate_email_syntax
 from pwdlib import PasswordHash
 
-from pomodoro.core.errors import InvalidEmailError, InvalidPasswordLengthError
+from pomodoro.core.errors import InvalidEmailError, InvalidPasswordLengthError, InvalidTimeZoneError
 
 if TYPE_CHECKING:
     from pomodoro.core.entities import User
@@ -62,6 +63,12 @@ def validate_password_length(password: str) -> None:
     """
     if not (MIN_PASSWORD_LENGTH <= len(password) <= MAX_PASSWORD_LENGTH):
         raise InvalidPasswordLengthError
+
+
+def validate_time_zone(time_zone: str) -> None:
+    """Raise `InvalidTimeZoneError` unless `time_zone` is a real IANA zone name."""
+    if time_zone not in available_timezones():
+        raise InvalidTimeZoneError
 
 
 def hash_password(password: str) -> str:

@@ -119,3 +119,10 @@ class TaskNotActiveError(DomainError):
 
     def __init__(self) -> None:
         super().__init__("Solo se puede iniciar un pomodoro en una tarea activa.")
+
+
+class InvalidTimeZoneError(DomainError):
+    """Raised when a `time_zone` isn't a real IANA zone name."""
+
+    def __init__(self) -> None:
+        super().__init__("La zona horaria no es válida.")
