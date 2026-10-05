@@ -1,5 +1,11 @@
-"""Proves `alembic upgrade head` builds the full schema from zero on SQLite."""
+"""Proves `alembic upgrade head` builds the full schema from zero.
 
+SQLite is exercised unconditionally; PostgreSQL is exercised too, but only
+when a PostgreSQL `DATABASE_URL` is configured in the environment, skipping
+cleanly otherwise (no PostgreSQL service is assumed to be running locally).
+"""
+
+import os
 from pathlib import Path
 
 import pytest
@@ -45,3 +51,22 @@ def test_alembic_downgrade_from_head_drops_every_table(tmp_path: Path) -> None:
     with engine.connect() as connection:
         tables = set(sa.inspect(connection).get_table_names())
     assert not (EXPECTED_TABLES & tables)
+
+
+@pytest.mark.integration
+def test_alembic_upgrade_head_creates_full_schema_on_fresh_postgresql() -> None:
+    database_url = os.environ.get("DATABASE_URL", "")
+    if not database_url.startswith("postgresql"):
+        pytest.skip("No PostgreSQL DATABASE_URL configured")
+
+    config = _alembic_config(database_url)
+    command.downgrade(config, "base")
+    try:
+        command.upgrade(config, "head")
+
+        engine = create_db_engine(database_url)
+        with engine.connect() as connection:
+            tables = set(sa.inspect(connection).get_table_names())
+        assert tables >= EXPECTED_TABLES
+    finally:
+        command.downgrade(config, "base")
