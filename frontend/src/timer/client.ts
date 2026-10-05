@@ -5,9 +5,9 @@ import type { TimerSnapshot } from "./engine";
 
 /**
  * Generated-client wrappers for every `/api/timer/*` action plus the day
- * summary read (T22's TimerPanel is the only caller of these). All actions
- * are body-less `POST`s except `start` (T24's scope, not used by this
- * ticket's panel), so each needs the explicit `Content-Type` header the
+ * summary read. `TimerPanel` (T22) calls every action except `start`, which
+ * `ActiveTab` (T24) calls instead. All actions are body-less `POST`s except
+ * `start`, so each of those needs the explicit `Content-Type` header the
  * backend's `csrf_guard` middleware requires on every mutating request
  * (see `src/auth/client.ts`'s `logoutUser`, which hit the same 415 originally).
  */
@@ -60,6 +60,15 @@ async function runTimerAction(
     message: extractErrorMessage(error, fallbackMessage),
     timer: conflictTimer(error),
   };
+}
+
+export function startTimer(taskId: number): Promise<TimerActionResult> {
+  // Unlike every other action here, `start` carries a body, so openapi-fetch
+  // already sets `Content-Type: application/json` on its own.
+  return runTimerAction(
+    () => apiClient.POST("/api/timer/start", { body: { task_id: taskId } }),
+    "No se pudo iniciar el Pomodoro.",
+  );
 }
 
 export function pauseTimer(): Promise<TimerActionResult> {

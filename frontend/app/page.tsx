@@ -1,4 +1,5 @@
 import { LogoutButton } from "@/src/auth/logout-button";
+import { ActiveTab } from "@/src/tasks/ActiveTab";
 import { TimerPanel } from "@/src/timer/TimerPanel";
 
 export default function Home() {
@@ -8,6 +9,9 @@ export default function Home() {
         Pomodoro Collective
       </h1>
       <TimerPanel />
+      <div className="w-full max-w-xl">
+        <ActiveTab />
+      </div>
       <LogoutButton />
     </main>
   );

@@ -1,23 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-
-/**
- * Same constraint `src/auth/client.test.ts` documents: `src/api/client.ts`
- * captures `globalThis.fetch` once at module-evaluation time, so each test
- * stubs the global first and re-imports the module fresh.
- */
-class SameOriginRequest extends Request {
-  constructor(input: string | URL | Request, init?: RequestInit) {
-    super(
-      typeof input === "string" ? new URL(input, "http://localhost") : input,
-      init,
-    );
-  }
-}
+import { jsonResponse, stubSameOriginFetch } from "@/src/testing/fetch-stub";
 
 async function importTimerClientWithFetch(fetchMock: typeof fetch) {
-  vi.resetModules();
-  vi.stubGlobal("fetch", fetchMock);
-  vi.stubGlobal("Request", SameOriginRequest);
+  stubSameOriginFetch(fetchMock);
   return import("./client");
 }
 
@@ -36,13 +21,7 @@ describe("timer action wrappers", () => {
   });
 
   it("sends Content-Type: application/json on a body-less pause request so csrf_guard accepts it", async () => {
-    const fetchMock = vi.fn<typeof fetch>(
-      async () =>
-        new Response(JSON.stringify(TIMER_BODY), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        }),
-    );
+    const fetchMock = vi.fn<typeof fetch>(async () => jsonResponse(TIMER_BODY));
     const { pauseTimer } = await importTimerClientWithFetch(fetchMock);
 
     const result = await pauseTimer();
@@ -52,6 +31,22 @@ describe("timer action wrappers", () => {
     expect(request.method).toBe("POST");
     expect(new URL(request.url).pathname).toBe("/api/timer/pause");
     expect(request.headers.get("content-type")).toBe("application/json");
+    expect(result).toEqual({ ok: true, timer: TIMER_BODY });
+  });
+
+  it("starts a Pomodoro via a real POST carrying the task id in the body", async () => {
+    const fetchMock = vi.fn<typeof fetch>(async () => jsonResponse(TIMER_BODY));
+    const { startTimer } = await importTimerClientWithFetch(fetchMock);
+
+    const result = await startTimer(42);
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const request = fetchMock.mock.calls[0][0] as Request;
+    expect(request.method).toBe("POST");
+    expect(new URL(request.url).pathname).toBe("/api/timer/start");
+    expect(request.headers.get("content-type")).toBe("application/json");
+    const body = await request.clone().json();
+    expect(body).toEqual({ task_id: 42 });
     expect(result).toEqual({ ok: true, timer: TIMER_BODY });
   });
 
@@ -67,12 +62,8 @@ describe("timer action wrappers", () => {
     ];
 
     for (const [exportName, path] of actions) {
-      const fetchMock = vi.fn<typeof fetch>(
-        async () =>
-          new Response(JSON.stringify(TIMER_BODY), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          }),
+      const fetchMock = vi.fn<typeof fetch>(async () =>
+        jsonResponse(TIMER_BODY),
       );
       const client = await importTimerClientWithFetch(fetchMock);
       const action = client[
@@ -90,12 +81,8 @@ describe("timer action wrappers", () => {
   });
 
   it("extracts the resynced Timer from a 409 conflict body instead of only reporting an error", async () => {
-    const fetchMock = vi.fn<typeof fetch>(
-      async () =>
-        new Response(JSON.stringify({ detail: TIMER_BODY }), {
-          status: 409,
-          headers: { "Content-Type": "application/json" },
-        }),
+    const fetchMock = vi.fn<typeof fetch>(async () =>
+      jsonResponse({ detail: TIMER_BODY }, 409),
     );
     const { stopTimer } = await importTimerClientWithFetch(fetchMock);
 
@@ -130,12 +117,8 @@ describe("timer action wrappers", () => {
 
   it("fetches the day summary via a real GET request", async () => {
     const summaryBody = { completed_today: 3, until_long_break: 2 };
-    const fetchMock = vi.fn<typeof fetch>(
-      async () =>
-        new Response(JSON.stringify(summaryBody), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        }),
+    const fetchMock = vi.fn<typeof fetch>(async () =>
+      jsonResponse(summaryBody),
     );
     const { fetchDaySummary } = await importTimerClientWithFetch(fetchMock);
 
