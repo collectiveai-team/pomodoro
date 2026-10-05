@@ -1,4 +1,5 @@
 import { LogoutButton } from "@/src/auth/logout-button";
+import { HistoryTab } from "@/src/history/HistoryTab";
 import { ActiveTab } from "@/src/tasks/ActiveTab";
 import { ArchivedTab } from "@/src/tasks/ArchivedTab";
 import { TimerPanel } from "@/src/timer/TimerPanel";
@@ -15,6 +16,9 @@ export default function Home() {
       </div>
       <div className="w-full max-w-xl">
         <ArchivedTab />
+      </div>
+      <div className="w-full max-w-xl">
+        <HistoryTab />
       </div>
       <LogoutButton />
     </main>
