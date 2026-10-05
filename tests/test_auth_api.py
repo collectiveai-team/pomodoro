@@ -9,7 +9,7 @@ can see.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 from typing import TYPE_CHECKING
 
 import pytest
@@ -20,40 +20,18 @@ from pomodoro.core.entities import User, UserId
 from pomodoro.core.normalization import normalize_key
 from pomodoro.database import tables
 from pomodoro.database.auth_session_repository import SQLAuthSessionRepository
-from pomodoro.database.engine import create_db_engine, session_scope
-from pomodoro.database.tables import SQLModel
+from pomodoro.database.engine import session_scope
 from pomodoro.database.user_repository import SQLUserRepository
 from pomodoro.entrypoints.app import create_app
 from sqlmodel import select
+
+from tests.conftest import NOW, TEST_PASSWORD, FakeClock
+from tests.conftest import http_test_engine as _engine
 
 if TYPE_CHECKING:
     from pathlib import Path
 
     from sqlalchemy.engine import Engine
-
-NOW = datetime(2026, 1, 1, tzinfo=UTC)
-TEST_PASSWORD = "correct horse"
-
-
-@dataclass
-class FakeClock:
-    """A `Clock` advanced by hand, standing in for the real wall clock in tests."""
-
-    current: datetime = NOW
-
-    def advance(self, seconds: float) -> datetime:
-        self.current += timedelta(seconds=seconds)
-        return self.current
-
-    def now(self) -> datetime:
-        return self.current
-
-
-def _engine(tmp_path: Path) -> Engine:
-    db_path = tmp_path / "pomodoro.db"
-    engine = create_db_engine(f"sqlite:///{db_path}")
-    SQLModel.metadata.create_all(engine)
-    return engine
 
 
 def _build_client(engine: Engine, clock: FakeClock) -> TestClient:

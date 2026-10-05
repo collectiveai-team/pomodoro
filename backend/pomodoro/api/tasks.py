@@ -1,0 +1,316 @@
+"""Tasks API: list (Active/Archived, filtered), create, edit text/tags, delete.
+
+Per the house convention (api/<area> owns router + schemas + use case), the
+orchestration lives here; `pomodoro.core.tasks`/`tags`/`filtering` supply the
+framework-free rules and `pomodoro.api.session` supplies the authenticated
+`User` every route below requires.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, replace
+from datetime import datetime
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
+
+from pomodoro.api.session import get_clock, require_session
+from pomodoro.core.clock import Clock
+from pomodoro.core.entities import Tag, TagId, Task, TaskId, User, UserId
+from pomodoro.core.errors import (
+    DuplicateActiveTaskTextError,
+    TagNameEmptyError,
+    TaskHasPomodorosError,
+    TaskTextEmptyError,
+    TaskTextTooLongError,
+)
+from pomodoro.core.filtering import SIN_ETIQUETA, filter_tasks
+from pomodoro.core.repositories import PomodoroRepository, TagRepository, TaskRepository
+from pomodoro.core.tags import find_tag_by_name, validate_tag_name
+from pomodoro.core.tasks import (
+    create_task as build_task,
+)
+from pomodoro.core.tasks import (
+    edit_task_text,
+    ensure_task_deletable,
+    sort_active_tasks,
+    sort_archived_tasks,
+)
+
+router = APIRouter(prefix="/api/tasks", tags=["tasks"])
+
+
+def get_task_repository() -> TaskRepository:
+    """Stand in for the TaskRepository dependency until the app factory overrides it."""
+    raise NotImplementedError("TaskRepository dependency must be wired by the app factory")
+
+
+def get_tag_repository() -> TagRepository:
+    """Stand in for the TagRepository dependency until the app factory overrides it."""
+    raise NotImplementedError("TagRepository dependency must be wired by the app factory")
+
+
+def get_pomodoro_repository() -> PomodoroRepository:
+    """Stand in for the PomodoroRepository dependency until the app factory overrides it."""
+    raise NotImplementedError("PomodoroRepository dependency must be wired by the app factory")
+
+
+UserDep = Annotated[User, Depends(require_session)]
+TaskRepoDep = Annotated[TaskRepository, Depends(get_task_repository)]
+TagRepoDep = Annotated[TagRepository, Depends(get_tag_repository)]
+PomodoroRepoDep = Annotated[PomodoroRepository, Depends(get_pomodoro_repository)]
+ClockDep = Annotated[Clock, Depends(get_clock)]
+
+NOT_FOUND_ERROR = "La tarea no existe."
+
+
+class CreateTaskRequest(BaseModel):
+    """Request body for `POST /api/tasks`."""
+
+    text: str
+    tags: list[str] = []
+
+
+class EditTaskTextRequest(BaseModel):
+    """Request body for `PATCH /api/tasks/{task_id}/text`."""
+
+    text: str
+
+
+class EditTaskTagsRequest(BaseModel):
+    """Request body for `PATCH /api/tasks/{task_id}/tags`: the full desired Tag set."""
+
+    tags: list[str]
+
+
+class TaskPublic(BaseModel):
+    """A Task as exposed over HTTP: Tags by name, plus the computed `deletable` flag."""
+
+    id: int
+    text: str
+    position: int
+    tags: list[str]
+    created_at: datetime
+    archived_at: datetime | None
+    deletable: bool
+
+    @classmethod
+    def from_entity(cls, task: Task, *, tag_names: _TagNameIndex, deletable: bool) -> TaskPublic:
+        """Build the public response shape from a `core` `Task` entity."""
+        return cls(
+            id=task.id,
+            text=task.text,
+            position=task.position,
+            tags=tag_names.names_for(task.tag_ids),
+            created_at=task.created_at,
+            archived_at=task.archived_at,
+            deletable=deletable,
+        )
+
+
+@dataclass(frozen=True)
+class _TagNameIndex:
+    """Lookup from `TagId` to name, built once per request from the User's Tag catalog."""
+
+    by_id: dict[int, str]
+
+    def names_for(self, tag_ids: tuple[TagId, ...]) -> list[str]:
+        return [self.by_id[tag_id] for tag_id in tag_ids if tag_id in self.by_id]
+
+
+def _tag_name_index(catalog: list[Tag]) -> _TagNameIndex:
+    return _TagNameIndex({tag.id: tag.name for tag in catalog})
+
+
+def _resolve_selected_tags(names: list[str], catalog: list[Tag]) -> list[TagId | str]:
+    resolved: list[TagId | str] = []
+    for name in names:
+        if name == SIN_ETIQUETA:
+            resolved.append(SIN_ETIQUETA)
+            continue
+        tag = find_tag_by_name(name, catalog)
+        if tag is not None:
+            resolved.append(tag.id)
+    return resolved
+
+
+def _resolve_or_create_tag_ids(
+    names: list[str], user_id: UserId, tag_repo: TagRepository
+) -> tuple[TagId, ...]:
+    ids: list[TagId] = []
+    seen: set[TagId] = set()
+    for name in names:
+        stripped = validate_tag_name(name)
+        tag = tag_repo.get_or_create_by_name(user_id, stripped)
+        if tag.id not in seen:
+            seen.add(tag.id)
+            ids.append(tag.id)
+    return tuple(ids)
+
+
+def _is_deletable(pomodoro_repo: PomodoroRepository, user_id: UserId, task_id: TaskId) -> bool:
+    return not pomodoro_repo.exists_for_task(user_id, task_id)
+
+
+def _to_public(
+    task: Task, *, tag_names: _TagNameIndex, pomodoro_repo: PomodoroRepository
+) -> TaskPublic:
+    return TaskPublic.from_entity(
+        task,
+        tag_names=tag_names,
+        deletable=_is_deletable(pomodoro_repo, task.user_id, task.id),
+    )
+
+
+def _filtered_response(
+    tasks: list[Task],
+    *,
+    text: str,
+    tags: list[str],
+    catalog: list[Tag],
+    pomodoro_repo: PomodoroRepository,
+) -> list[TaskPublic]:
+    selected = _resolve_selected_tags(tags, catalog)
+    filtered = filter_tasks(tasks, text, selected)
+    tag_names = _tag_name_index(catalog)
+    return [_to_public(task, tag_names=tag_names, pomodoro_repo=pomodoro_repo) for task in filtered]
+
+
+@router.get("/active")
+def list_active_tasks(
+    user: UserDep,
+    task_repo: TaskRepoDep,
+    tag_repo: TagRepoDep,
+    pomodoro_repo: PomodoroRepoDep,
+    tags: Annotated[list[str], Query(default_factory=list)],
+    text: str = "",
+) -> list[TaskPublic]:
+    """Return the User's Active Tasks (newest first), filtered by `filter_tasks`."""
+    active = sort_active_tasks(task_repo.list_active(user.id))
+    catalog = tag_repo.list(user.id)
+    return _filtered_response(
+        active, text=text, tags=tags, catalog=catalog, pomodoro_repo=pomodoro_repo
+    )
+
+
+@router.get("/archived")
+def list_archived_tasks(
+    user: UserDep,
+    task_repo: TaskRepoDep,
+    tag_repo: TagRepoDep,
+    pomodoro_repo: PomodoroRepoDep,
+    tags: Annotated[list[str], Query(default_factory=list)],
+    text: str = "",
+) -> list[TaskPublic]:
+    """Return the User's Archived Tasks (most recently archived first), filtered."""
+    archived = sort_archived_tasks(task_repo.list_archived(user.id))
+    catalog = tag_repo.list(user.id)
+    return _filtered_response(
+        archived, text=text, tags=tags, catalog=catalog, pomodoro_repo=pomodoro_repo
+    )
+
+
+@router.post("", status_code=status.HTTP_201_CREATED)
+def create_task(
+    body: CreateTaskRequest,
+    user: UserDep,
+    task_repo: TaskRepoDep,
+    tag_repo: TagRepoDep,
+    pomodoro_repo: PomodoroRepoDep,
+    clock: ClockDep,
+) -> TaskPublic:
+    """Create a new Active Task, assigning Tags by name (creating/reusing per T4)."""
+    try:
+        tag_ids = _resolve_or_create_tag_ids(body.tags, user.id, tag_repo)
+    except TagNameEmptyError as error:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(error)) from error
+
+    active_tasks = task_repo.list_active(user.id)
+    try:
+        draft = build_task(
+            id=TaskId(0),
+            user_id=user.id,
+            text=body.text,
+            active_tasks=active_tasks,
+            created_at=clock.now(),
+            tag_ids=tag_ids,
+        )
+    except DuplicateActiveTaskTextError as error:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(error)) from error
+    except (TaskTextEmptyError, TaskTextTooLongError) as error:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(error)) from error
+
+    stored = task_repo.add(draft)
+    catalog = tag_repo.list(user.id)
+    return _to_public(stored, tag_names=_tag_name_index(catalog), pomodoro_repo=pomodoro_repo)
+
+
+def _get_owned_task(task_repo: TaskRepository, user: User, task_id: int) -> Task:
+    task = task_repo.get(user.id, TaskId(task_id))
+    if task is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, NOT_FOUND_ERROR)
+    return task
+
+
+@router.patch("/{task_id}/text")
+def edit_text(
+    task_id: int,
+    body: EditTaskTextRequest,
+    user: UserDep,
+    task_repo: TaskRepoDep,
+    tag_repo: TagRepoDep,
+    pomodoro_repo: PomodoroRepoDep,
+) -> TaskPublic:
+    """Edit a Task's text, applying the same validation `create` uses."""
+    task = _get_owned_task(task_repo, user, task_id)
+    active_tasks = task_repo.list_active(user.id)
+    try:
+        updated = edit_task_text(task, body.text, active_tasks)
+    except DuplicateActiveTaskTextError as error:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(error)) from error
+    except (TaskTextEmptyError, TaskTextTooLongError) as error:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(error)) from error
+
+    stored = task_repo.update(updated)
+    catalog = tag_repo.list(user.id)
+    return _to_public(stored, tag_names=_tag_name_index(catalog), pomodoro_repo=pomodoro_repo)
+
+
+@router.patch("/{task_id}/tags")
+def edit_tags(
+    task_id: int,
+    body: EditTaskTagsRequest,
+    user: UserDep,
+    task_repo: TaskRepoDep,
+    tag_repo: TagRepoDep,
+    pomodoro_repo: PomodoroRepoDep,
+) -> TaskPublic:
+    """Replace a Task's Tag assignments with the given set of names."""
+    task = _get_owned_task(task_repo, user, task_id)
+    try:
+        tag_ids = _resolve_or_create_tag_ids(body.tags, user.id, tag_repo)
+    except TagNameEmptyError as error:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(error)) from error
+
+    stored = task_repo.update(replace(task, tag_ids=tag_ids))
+    catalog = tag_repo.list(user.id)
+    return _to_public(stored, tag_names=_tag_name_index(catalog), pomodoro_repo=pomodoro_repo)
+
+
+@router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_task(
+    task_id: int,
+    user: UserDep,
+    task_repo: TaskRepoDep,
+    pomodoro_repo: PomodoroRepoDep,
+) -> None:
+    """Permanently delete a Task, only if it has zero Pomodoros."""
+    task = _get_owned_task(task_repo, user, task_id)
+    has_pomodoros = pomodoro_repo.exists_for_task(user.id, task.id)
+    try:
+        ensure_task_deletable(has_pomodoros=has_pomodoros)
+    except TaskHasPomodorosError as error:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(error)) from error
+
+    task_repo.delete(user.id, task.id)
