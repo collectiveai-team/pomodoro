@@ -68,8 +68,6 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-          cache-dependency-path: e2e/pnpm-lock.yaml
 
       - name: Install e2e dependencies
         working-directory: e2e

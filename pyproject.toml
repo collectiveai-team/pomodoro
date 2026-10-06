@@ -113,6 +113,9 @@ project-excludes = [
   "**/.venv/**/*",
   "**/.uv_cache/**/*",
   ".worktrees/**",
+  # .claude/skills is a tracked symlink to the gitignored .agents/skills, so it
+  # dangles in fresh clones (CI) and pyrefly aborts on broken symlinks.
+  ".claude/**",
   ".orquestalite/**",
 ]
 use-ignore-files = false

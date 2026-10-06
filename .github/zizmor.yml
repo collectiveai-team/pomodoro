@@ -16,3 +16,9 @@ rules:
   superfluous-actions:
     ignore:
       - release.yml
+  # The composite setup actions are referenced as local actions (./.github/
+  # actions/*) after checkout. The self-repository syntax ($/...) makes the
+  # runner download the repo as an action archive, which fails on the tracked
+  # .claude/skills symlink (its .agents/skills target is gitignored).
+  self-repository:
+    disable: true
