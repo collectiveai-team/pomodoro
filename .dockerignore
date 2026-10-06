@@ -1,0 +1,26 @@
+# Backend image build context is the repo root; keep it to what
+# backend/Dockerfile actually copies (pyproject.toml, uv.lock, alembic.ini,
+# backend/). Everything below is irrelevant to that image.
+.git/
+.github/
+.venv/
+.tmp/
+.scratch/
+.worktrees/
+.journals/
+.agents/
+.claude/
+.serena/
+.orquestalite/
+.pytest_cache/
+.ruff_cache/
+.import_linter_cache/
+.complexipy_cache/
+ast-grep/
+docs/
+tests/
+frontend/
+node_modules/
+__pycache__/
+*.py[cod]
+*.db

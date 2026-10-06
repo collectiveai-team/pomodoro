@@ -60,7 +60,7 @@ repo = "local"
 [[repos.hooks]]
 id = "agents-conventional-commits"
 name = "agents-conventional-commits (commit-msg)"
-entry = "python3 -c \"import re,sys; msg=open(sys.argv[1],encoding='utf-8').readline().strip(); ok=bool(re.match(r'^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\\([a-z0-9._-]+\\))?!?: .+', msg)) or msg.startswith(('Merge ','Revert ','fixup! ')); sys.exit(0 if ok else not print(f'Error: CES-75 (agents-conventional-commits): commit subject must follow Conventional Commits (type(scope): description). Got: {msg!r}'))\""
+entry = "python3 -c \"import re,sys; msg=open(sys.argv[1],encoding='utf-8').readline().strip(); ok=bool(re.match(r'^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\\([A-Za-z0-9._-]+\\))?!?: .+', msg)) or msg.startswith(('Merge ','Revert ','fixup! ')); sys.exit(0 if ok else not print(f'Error: CES-75 (agents-conventional-commits): commit subject must follow Conventional Commits (type(scope): description). Got: {msg!r}'))\""
 language = "system"
 stages = ["commit-msg"]
 
@@ -82,10 +82,13 @@ stages = ["commit-msg"]
 # here rather than the Python-only hooks. Respects .gitignore by default. `--threshold` alone is
 # the gate (fails only over the percentage); jscpd v5's separate `--exit-code` flag fails on ANY
 # clone found regardless of threshold — do not combine the two or the threshold becomes inert.
+# `frontend/src/api/schema.ts` (T19) is excluded: it is openapi-typescript-generated, not
+# hand-written, so its repeated per-endpoint response/error shapes are not a "copy instead of
+# extracting a helper" smell — there is no helper to extract from a generator's own output.
 [[repos.hooks]]
 id = "jscpd"
 name = "jscpd (copy-paste duplication)"
-entry = "npx --yes jscpd@5 . --threshold 1"
+entry = "npx --yes jscpd@5 . --threshold 1 --ignore \"frontend/src/api/schema.ts\""
 language = "system"
 pass_filenames = false
 priority = 2

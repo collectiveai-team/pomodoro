@@ -30,7 +30,7 @@ jobs:
           title = os.environ["PR_TITLE"]
           pattern = (
               r"^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)"
-              r"(\([a-z0-9._-]+\))?!?: .+"
+              r"(\([A-Za-z0-9._-]+\))?!?: .+"
           )
           if re.match(pattern, title):
               print(f"PR title OK: {title!r}")

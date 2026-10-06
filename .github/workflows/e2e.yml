@@ -1,0 +1,100 @@
+name: e2e
+
+# Playwright smoke test against the real docker-compose stack (T31): register
+# -> create a Task -> start and pause a Pomodoro -> reload and see the same
+# Timer state -> logout (T32, Testing Decisions "E2E"). Deliberately its own
+# job, separate from backend-ci's unit/integration gates and frontend-ci's
+# lint/typecheck/api-client-drift gates -- it drives real containers end to
+# end instead of the in-process test clients those use.
+
+on:
+  pull_request:
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - "e2e/**"
+      - "docker-compose.yml"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/e2e.yml"
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - "e2e/**"
+      - "docker-compose.yml"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/e2e.yml"
+
+concurrency:
+  group: e2e-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "24"
+  E2E_BASE_URL: "http://localhost:3000"
+
+jobs:
+  smoke:
+    name: smoke (docker compose)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # Builds postgres -> migrate (one-shot `alembic upgrade head`) -> backend
+      # -> frontend from the same docker-compose.yml T31 verified locally.
+      # `--wait` blocks until every service with a healthcheck (and every
+      # `depends_on: condition: service_healthy/service_completed_successfully`
+      # it gates) reports healthy, or fails the step on timeout -- no separate
+      # polling loop needed.
+      - name: docker compose up (build + wait for health)
+        run: docker compose up -d --build --wait --wait-timeout 300
+
+      - name: docker compose ps
+        if: always()
+        run: docker compose ps
+
+      - name: Enable corepack
+        shell: bash
+        run: corepack enable
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install e2e dependencies
+        working-directory: e2e
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright's Chromium (+ OS deps)
+        working-directory: e2e
+        run: npx playwright install --with-deps chromium
+
+      - name: Run the Playwright smoke test
+        working-directory: e2e
+        run: pnpm run test
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            e2e/playwright-report/
+            e2e/test-results/
+          retention-days: 7
+
+      - name: docker compose logs
+        if: failure()
+        run: docker compose logs
+
+      - name: docker compose down
+        if: always()
+        run: docker compose down -v

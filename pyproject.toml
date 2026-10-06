@@ -7,7 +7,7 @@ build-backend = "hatchling.build"
 source = "vcs"
 
 [tool.hatch.build.targets.wheel]
-packages = ["pomodoro"]
+packages = ["backend/pomodoro"]
 
 # MARK: Ruff
 [tool.ruff]
@@ -83,7 +83,26 @@ max-complexity = 10
 ban-relative-imports = "all"
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101", "INP001", "S603", "S607"]
+"tests/**" = ["S101", "INP001", "S603", "S607", "S106", "S105"]
+# FastAPI routes and Pydantic schemas are introspected at runtime (`get_type_hints`)
+# to build request/response validation, so TC001/TC003 would break them by hiding
+# required imports behind `TYPE_CHECKING` — these annotations are never lazy.
+"backend/pomodoro/api/**" = ["TC001", "TC003"]
+# SQLModel table classes are introspected at runtime the same way, to build columns.
+"backend/pomodoro/database/**" = ["TC001", "TC003"]
+
+# MARK: deptry
+# The import package lives under `backend/` (ADR-0001), not at the repo root, so deptry
+# can't infer it is first-party from directory layout alone.
+[tool.deptry]
+known_first_party = ["pomodoro"]
+
+# psycopg is a PostgreSQL DBAPI driver selected by SQLAlchemy through the
+# `postgresql+psycopg://` URL scheme, never imported directly by our code.
+# tzdata is the IANA database `zoneinfo` falls back to when the host (e.g. a
+# slim container image) ships no system tz files; it is never imported.
+[tool.deptry.per_rule_ignores]
+DEP002 = ["psycopg", "tzdata"]
 
 # MARK: Pyrefly
 [tool.pyrefly]
@@ -93,36 +112,38 @@ project-excludes = [
   "**/venv/**/*",
   "**/.venv/**/*",
   "**/.uv_cache/**/*",
+  ".worktrees/**",
+  # .claude/skills is a tracked symlink to the gitignored .agents/skills, so it
+  # dangles in fresh clones (CI) and pyrefly aborts on broken symlinks.
+  ".claude/**",
+  ".orquestalite/**",
 ]
 use-ignore-files = false
 disable-project-excludes-heuristics = true
 
 # MARK: import-linter (CES-5 layer direction, CES-17 api-boundary layout)
-# Commented skeleton — uncomment once the package actually has layers. Enforces the house import
-# direction: entrypoints -> api -> database/impl -> core (a higher layer may import lower ones,
-# never the reverse). Add `import-linter` to the dev group and run `uvx --from import-linter
-# lint-imports`. Replace `myapp` below with your import package name.
-#
-# [tool.importlinter]
-# root_package = "myapp"
-#
-# [[tool.importlinter.contracts]]
-# name = "Layered architecture (CES-5)"
-# type = "layers"
-# layers = [
-#   "myapp.entrypoints",
-#   "myapp.api",
-#   "myapp.database | myapp.impl",
-#   "myapp.core",
-# ]
-#
-# # CES-17 api-boundary layout: the api package is the only inbound HTTP boundary; nothing
-# # outside api may import api.schemas/routers internals.
-# [[tool.importlinter.contracts]]
-# name = "API is the only inbound boundary (CES-17)"
-# type = "forbidden"
-# source_modules = ["myapp.core", "myapp.database"]
-# forbidden_modules = ["myapp.api"]
+# Enforces the house import direction: entrypoints -> api -> database -> core (a higher layer
+# may import lower ones, never the reverse). Run with `uv run lint-imports`.
+[tool.importlinter]
+root_package = "pomodoro"
+
+[[tool.importlinter.contracts]]
+name = "Layered architecture (CES-5)"
+type = "layers"
+layers = [
+  "pomodoro.entrypoints",
+  "pomodoro.api",
+  "pomodoro.database",
+  "pomodoro.core",
+]
+
+# CES-17 api-boundary layout: the api package is the only inbound HTTP boundary; nothing
+# outside api may import api.schemas/routers internals.
+[[tool.importlinter.contracts]]
+name = "API is the only inbound boundary (CES-17)"
+type = "forbidden"
+source_modules = ["pomodoro.core", "pomodoro.database"]
+forbidden_modules = ["pomodoro.api"]
 
 # MARK: Pytest
 [tool.pytest.ini_options]
@@ -150,7 +171,22 @@ readme = "README.md"
 requires-python = ">=3.14"
 
 # MARK: Dependencies
-dependencies = []
+dependencies = [
+  "fastapi>=0.115.0",
+  "uvicorn>=0.32.0",
+  "pydantic>=2.9.0",
+  "sqlmodel>=0.0.47",
+  "alembic>=1.20.0",
+  "psycopg[binary]>=3.3.6",
+  "sqlalchemy>=2.0.54",
+  "pwdlib[argon2]>=0.3.1",
+  "email-validator>=2.3.0",
+  "tzdata>=2026.5",
+]
+
+[project.scripts]
+pomodoro-api = "pomodoro.entrypoints.app:main"
+pomodoro-export-openapi = "pomodoro.entrypoints.export_openapi:main"
 
 # MARK: Extra deps
 [dependency-groups]
@@ -162,4 +198,7 @@ dev = [
   # order on every run — catches state-leaking/order-dependent tests for free.
   "pytest-randomly>=4.1.0",
   "ruff>=0.7.0",
+  # TestClient (fastapi.testclient) wraps httpx; not pulled in by fastapi's base deps.
+  "httpx>=0.27.0",
+  "import-linter>=2.1",
 ]

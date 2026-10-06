@@ -1,0 +1,69 @@
+# Production-like local environment (Despliegue section, issue #12):
+# frontend + backend + PostgreSQL, wired through the images built by
+# backend/Dockerfile (T29) and frontend/Dockerfile (T30).
+#
+# Migrations are an explicit one-shot step (the `migrate` service), never run
+# implicitly on backend boot -- both Dockerfiles' default CMD is the server
+# process only. The frontend never talks to the backend directly from the
+# browser: it proxies `/api/*` server-side via proxy.ts, which reads
+# BACKEND_ORIGIN at runtime (set below to the backend's in-network address).
+#
+#   docker compose up --build
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: pomodoro
+      POSTGRES_PASSWORD: pomodoro
+      POSTGRES_DB: pomodoro
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pomodoro -d pomodoro"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["backend/scripts/migrate.sh"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://pomodoro:pomodoro@postgres:5432/pomodoro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg://pomodoro:pomodoro@postgres:5432/pomodoro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: frontend
+      dockerfile: Dockerfile
+    environment:
+      BACKEND_ORIGIN: http://backend:8000
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

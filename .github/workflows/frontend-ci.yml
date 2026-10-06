@@ -1,0 +1,74 @@
+name: frontend-ci
+
+# Regenerates the frontend's OpenAPI-derived client from the backend's current
+# schema and fails if it drifted from the committed version (CES-91 / story 91,
+# T19). No test-running frontend CI existed before this workflow.
+
+on:
+  pull_request:
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/frontend-ci.yml"
+      - ".github/actions/setup-frontend/**"
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/frontend-ci.yml"
+      - ".github/actions/setup-frontend/**"
+
+concurrency:
+  group: frontend-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  UV_VERSION: "0.11.12"
+  NODE_VERSION: "24"
+
+jobs:
+  api-client-drift:
+    name: api-client-drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-backend
+        with:
+          uv-version: ${{ env.UV_VERSION }}
+
+      - uses: ./.github/actions/setup-frontend
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Export the backend's current OpenAPI schema
+        run: uv run pomodoro-export-openapi .tmp/openapi.json
+
+      - name: Regenerate the typed API client
+        working-directory: frontend
+        run: pnpm run generate:api-client
+
+      - name: Fail if the committed client drifted from the backend's schema
+        run: |
+          if ! git diff --exit-code -- frontend/src/api/schema.ts; then
+            echo "::error::frontend/src/api/schema.ts is out of date with the backend's OpenAPI schema. Run 'pnpm run generate:api-client' in frontend/ and commit the result."
+            exit 1
+          fi
+
+      - name: Typecheck the regenerated client
+        working-directory: frontend
+        run: pnpm run typecheck
+
+      - name: Lint (Biome)
+        working-directory: frontend
+        run: pnpm run lint
