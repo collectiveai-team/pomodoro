@@ -8,9 +8,12 @@ from __future__ import annotations
 
 import ast
 import os
+import shutil
 import subprocess
 import tomllib
 from pathlib import Path
+
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CORE_DIR = REPO_ROOT / "backend" / "pomodoro" / "core"
@@ -117,6 +120,10 @@ layers = [
     assert result.returncode != 0, "a reversed-layer import must fail the import-linter gate"
 
 
+@pytest.mark.skipif(
+    shutil.which("ast-grep") is None,
+    reason="ast-grep not on PATH; CI's gates job enforces the rules via uvx",
+)
 def test_ast_grep_rejects_a_bare_dict_return_at_a_boundary(tmp_path: Path) -> None:
     """The ast-grep rule set must flag `-> dict` and dict-literal returns."""
     offender = tmp_path / "boundary.py"
