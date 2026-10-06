@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -152,6 +152,17 @@ def test_stop_allowed_from_paused_pomodoro_too() -> None:
     clock.advance(999)  # paused gap, must not count
     timer = stop(timer, clock.now())
     assert timer.accumulated_active_seconds == 20
+
+
+def test_log_falls_back_when_a_migrated_timer_has_no_phase_ended_at() -> None:
+    """A Timer stopped before the `phase_ended_at` column existed still logs."""
+    clock = FakeClock()
+    timer = start(idle_timer(USER), TASK, clock.now())
+    clock.advance(42)
+    timer = replace(stop(timer, clock.now()), phase_ended_at=None)
+    result = log(timer)
+    assert result.pomodoro is not None
+    assert result.pomodoro.ended_at == NOW + timedelta(seconds=42)
 
 
 def test_stop_rejected_from_idle() -> None:

@@ -99,8 +99,10 @@ known_first_party = ["pomodoro"]
 
 # psycopg is a PostgreSQL DBAPI driver selected by SQLAlchemy through the
 # `postgresql+psycopg://` URL scheme, never imported directly by our code.
+# tzdata is the IANA database `zoneinfo` falls back to when the host (e.g. a
+# slim container image) ships no system tz files; it is never imported.
 [tool.deptry.per_rule_ignores]
-DEP002 = ["psycopg"]
+DEP002 = ["psycopg", "tzdata"]
 
 # MARK: Pyrefly
 [tool.pyrefly]
@@ -176,6 +178,7 @@ dependencies = [
   "sqlalchemy>=2.0.54",
   "pwdlib[argon2]>=0.3.1",
   "email-validator>=2.3.0",
+  "tzdata>=2026.5",
 ]
 
 [project.scripts]

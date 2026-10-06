@@ -546,6 +546,7 @@ dependencies = [
     { name = "pydantic" },
     { name = "sqlalchemy" },
     { name = "sqlmodel" },
+    { name = "tzdata" },
     { name = "uvicorn" },
 ]
 
@@ -570,6 +571,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.9.0" },
     { name = "sqlalchemy", specifier = ">=2.0.54" },
     { name = "sqlmodel", specifier = ">=0.0.47" },
+    { name = "tzdata", specifier = ">=2026.5" },
     { name = "uvicorn", specifier = ">=0.32.0" },
 ]
 

@@ -308,6 +308,18 @@ def stop(timer: Timer, now: datetime) -> Timer:
     )
 
 
+def _interrupted_ended_at(timer: Timer) -> datetime:
+    """Return the stop instant of an AskingToLog Timer.
+
+    Timers stopped before `phase_ended_at` existed carry NULL there (the
+    migration adds the column without a backfill); fall back to the previous
+    rule, start plus active time, rather than persisting a NULL `ended_at`.
+    """
+    if timer.phase_ended_at is not None:
+        return timer.phase_ended_at
+    return timer.phase_started_at + timedelta(seconds=timer.accumulated_active_seconds)  # type: ignore[operator]
+
+
 def log(timer: Timer) -> LogResult:
     """AskingToLog + log -> Idle, persisting the real unpaused time.
 
@@ -323,7 +335,7 @@ def log(timer: Timer) -> LogResult:
         user_id=timer.user_id,
         task_id=timer.task_id,  # type: ignore[arg-type]
         started_at=timer.phase_started_at,  # type: ignore[arg-type]
-        ended_at=timer.phase_ended_at,  # type: ignore[arg-type]
+        ended_at=_interrupted_ended_at(timer),
         duration_seconds=timer.accumulated_active_seconds,
         status=PomodoroStatus.INTERRUPTED_LOGGED,
     )
