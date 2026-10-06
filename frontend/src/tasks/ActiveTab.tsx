@@ -16,18 +16,21 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { startTimer } from "@/src/timer/client";
-import { createTimerEngine, type TimerEngine } from "@/src/timer/engine";
+import { useTimerEngine } from "@/src/timer/TimerEngineProvider";
 import {
   archiveTask,
   createRowActionApplier,
   createTask,
   editTaskTags,
+  editTaskText,
   fetchActiveTasks,
   reorderTasks,
   type TaskPublic,
 } from "./client";
+import { EditableTaskText } from "./EditableTaskText";
+import { TagCatalog } from "./TagCatalog";
 import { TaskFilter } from "./TaskFilter";
 import { useFilteredTaskList } from "./useFilteredTaskList";
 
@@ -60,6 +63,7 @@ type TaskRowProps = {
   startDisabled: boolean;
   onStart: () => void;
   onArchive: () => void;
+  onEditText: (text: string) => void;
   onEditTags: (tags: string[]) => void;
   rowError: string | null;
 };
@@ -71,6 +75,7 @@ function TaskRow({
   startDisabled,
   onStart,
   onArchive,
+  onEditText,
   onEditTags,
   rowError,
 }: TaskRowProps) {
@@ -125,7 +130,7 @@ function TaskRow({
           ▶
         </button>
 
-        <span className="flex-1 text-sm font-medium text-ink">{task.text}</span>
+        <EditableTaskText text={task.text} onSave={onEditText} />
 
         <button
           type="button"
@@ -193,15 +198,16 @@ export function ActiveTab() {
     setListError,
     loadCounts,
     refreshTagCatalog,
+    tagCatalog,
   } = useFilteredTaskList(fetchActiveTasks, "active");
   const [newTaskText, setNewTaskText] = useState("");
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [rowErrors, setRowErrors] = useState<Record<number, string>>({});
-  const [timerPhase, setTimerPhase] = useState<string | null>(null);
-  const [inProgressTaskId, setInProgressTaskId] = useState<number | null>(null);
+  const { snapshot: timerSnapshot, applyActionResult } = useTimerEngine();
+  const timerPhase = timerSnapshot?.phase ?? null;
+  const inProgressTaskId = timerSnapshot?.task?.id ?? null;
 
-  const engineRef = useRef<TimerEngine | null>(null);
   const hasActiveFilter =
     textFilter.trim().length > 0 || selectedTags.length > 0;
 
@@ -217,21 +223,6 @@ export function ActiveTab() {
     setRowErrors,
     () => void loadCounts(),
   );
-
-  useEffect(() => {
-    const engine = createTimerEngine({
-      onSnapshot: (snapshot) => {
-        setTimerPhase(snapshot.phase);
-        setInProgressTaskId(snapshot.task?.id ?? null);
-      },
-    });
-    engineRef.current = engine;
-    void engine.refetch();
-    return () => {
-      engine.dispose();
-      engineRef.current = null;
-    };
-  }, []);
 
   async function handleCreate(): Promise<void> {
     const trimmed = newTaskText.trim();
@@ -270,14 +261,25 @@ export function ActiveTab() {
     }
   }
 
+  async function handleEditText(taskId: number, text: string): Promise<void> {
+    const result = await editTaskText(taskId, text);
+    if (result.ok) {
+      setTasks((previous) =>
+        previous.map((task) => (task.id === taskId ? result.task : task)),
+      );
+    } else {
+      setRowErrors((previous) => ({ ...previous, [taskId]: result.message }));
+    }
+  }
+
   async function handleStart(taskId: number): Promise<void> {
     const result = await startTimer(taskId);
     if (result.ok) {
-      engineRef.current?.applyActionResult(result.timer);
+      applyActionResult(result.timer);
       return;
     }
     if (result.timer) {
-      engineRef.current?.applyActionResult(result.timer);
+      applyActionResult(result.timer);
       return;
     }
     setRowErrors((previous) => ({ ...previous, [taskId]: result.message }));
@@ -344,6 +346,29 @@ export function ActiveTab() {
         selectedTags={selectedTags}
         onToggleTag={toggleTag}
       />
+      <TagCatalog
+        tags={tagCatalog}
+        onRenamed={(previousName, nextName) => {
+          setTasks((previous) =>
+            previous.map((task) => ({
+              ...task,
+              tags: task.tags.map((tag) =>
+                tag === previousName ? nextName : tag,
+              ),
+            })),
+          );
+          void refreshTagCatalog();
+        }}
+        onDeleted={(tagName) => {
+          setTasks((previous) =>
+            previous.map((task) => ({
+              ...task,
+              tags: task.tags.filter((tag) => tag !== tagName),
+            })),
+          );
+          void refreshTagCatalog();
+        }}
+      />
       {hasActiveFilter ? (
         <p className="text-xs text-ink/60">
           Limpiá el filtro para reordenar arrastrando.
@@ -375,6 +400,7 @@ export function ActiveTab() {
                 startDisabled={timerPhase !== "idle"}
                 onStart={() => void handleStart(task.id)}
                 onArchive={() => void handleArchive(task.id)}
+                onEditText={(text) => void handleEditText(task.id, text)}
                 onEditTags={(tags) => void handleEditTags(task.id, tags)}
                 rowError={rowErrors[task.id] ?? null}
               />

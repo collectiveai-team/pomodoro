@@ -1,13 +1,15 @@
 "use client";
-
 import { useState } from "react";
+
 import {
   createRowActionApplier,
   deleteTask,
+  editTaskText,
   fetchArchivedTasks,
   type TaskPublic,
   unarchiveTask,
 } from "./client";
+import { EditableTaskText } from "./EditableTaskText";
 import { TaskFilter } from "./TaskFilter";
 import { useFilteredTaskList } from "./useFilteredTaskList";
 
@@ -22,14 +24,21 @@ type TaskRowProps = {
   task: TaskPublic;
   onUnarchive: () => void;
   onDelete: () => void;
+  onEditText: (text: string) => void;
   rowError: string | null;
 };
 
-function TaskRow({ task, onUnarchive, onDelete, rowError }: TaskRowProps) {
+function TaskRow({
+  task,
+  onUnarchive,
+  onDelete,
+  onEditText,
+  rowError,
+}: TaskRowProps) {
   return (
     <li className="flex flex-col gap-2 rounded-md border border-ink/10 p-3">
       <div className="flex items-center gap-2">
-        <span className="flex-1 text-sm font-medium text-ink">{task.text}</span>
+        <EditableTaskText text={task.text} onSave={onEditText} />
 
         <button
           type="button"
@@ -106,6 +115,17 @@ export function ArchivedTab() {
     applyRowResult(taskId, await deleteTask(taskId));
   }
 
+  async function handleEditText(taskId: number, text: string): Promise<void> {
+    const result = await editTaskText(taskId, text);
+    if (result.ok) {
+      setTasks((previous) =>
+        previous.map((task) => (task.id === taskId ? result.task : task)),
+      );
+      return;
+    }
+    setRowErrors((previous) => ({ ...previous, [taskId]: result.message }));
+  }
+
   return (
     <section className="flex flex-col gap-4 p-4">
       <h2 className="font-olivetta text-xl font-semibold text-ink">
@@ -133,6 +153,7 @@ export function ArchivedTab() {
             task={task}
             onUnarchive={() => void handleUnarchive(task.id)}
             onDelete={() => void handleDelete(task.id)}
+            onEditText={(text) => void handleEditText(task.id, text)}
             rowError={rowErrors[task.id] ?? null}
           />
         ))}

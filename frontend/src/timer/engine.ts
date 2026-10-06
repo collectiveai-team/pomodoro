@@ -75,6 +75,34 @@ export function remainingSecondsAt(
   return Math.max(snapshot.remaining_seconds - elapsedServerSeconds, 0);
 }
 
+/**
+ * Whether the *previous* snapshot's own countdown would already have reached
+ * zero by `nowClientMs`, judged purely from this client's elapsed time.
+ *
+ * `isNaturalCompletion` is a blind phase-diff: `break_running -> idle` is the
+ * destination of both a Break ending on its own and a Break skipped from
+ * *another* tab or device (story 65 promises one shared Timer across both).
+ * A skip can arrive at any remaining time, so the elapsed-time check below is
+ * what actually tells the two apart: if the skip happened well before the
+ * Break's own countdown would have hit zero, this client's own clock proves
+ * it, and the Alarm must stay silent (story 60).
+ */
+function previouslyRanOutClientSide(
+  previousSnapshot: TimerSnapshot | null,
+  previousFetchedAtClientMs: number | null,
+  nowClientMs: number,
+): boolean {
+  if (previousSnapshot === null || previousFetchedAtClientMs === null) {
+    return false;
+  }
+  const projectedRemaining = remainingSecondsAt(
+    previousSnapshot,
+    previousFetchedAtClientMs,
+    nowClientMs,
+  );
+  return projectedRemaining !== null && projectedRemaining <= 0;
+}
+
 async function defaultFetchTimer(): Promise<TimerSnapshot> {
   const { data, error } = await apiClient.GET("/api/timer");
   if (!data) {
@@ -160,13 +188,20 @@ export function createTimerEngine(
     causedByAction: boolean,
   ): void {
     const previousPhase = snapshot?.phase ?? null;
+    const previousSnapshot = snapshot;
+    const previousFetchedAtClientMs = fetchedAtClientMs;
     snapshot = nextSnapshot;
     fetchedAtClientMs = now();
     zeroCrossingHandled = false;
     options.onSnapshot?.(nextSnapshot);
     if (
       !causedByAction &&
-      isNaturalCompletion(previousPhase, nextSnapshot.phase)
+      isNaturalCompletion(previousPhase, nextSnapshot.phase) &&
+      previouslyRanOutClientSide(
+        previousSnapshot,
+        previousFetchedAtClientMs,
+        fetchedAtClientMs,
+      )
     ) {
       options.onAlarm?.();
     }

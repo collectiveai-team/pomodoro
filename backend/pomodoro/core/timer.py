@@ -65,6 +65,7 @@ class Timer:
     phase_started_at: datetime | None
     accumulated_active_seconds: int
     running_since: datetime | None
+    phase_ended_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -93,6 +94,7 @@ def idle_timer(user_id: UserId) -> Timer:
         phase_started_at=None,
         accumulated_active_seconds=0,
         running_since=None,
+        phase_ended_at=None,
     )
 
 
@@ -131,6 +133,7 @@ def _idle(timer: Timer) -> Timer:
         phase_started_at=None,
         accumulated_active_seconds=0,
         running_since=None,
+        phase_ended_at=None,
     )
 
 
@@ -148,6 +151,9 @@ def settle(timer: Timer, now: datetime) -> SettleResult:
     return SettleResult(timer=timer)
 
 
+MAX_SETTLE_CAS_ATTEMPTS = 5
+
+
 def settle_and_persist(
     timer_repo: TimerRepository,
     pomodoro_repo: PomodoroRepository,
@@ -159,13 +165,43 @@ def settle_and_persist(
     Shared by `api.timer` (every route) and `api.tasks` (the in-progress-Task
     guard) so neither reimplements settle-then-persist against the stored row.
     """
-    timer = timer_repo.get(user_id) or idle_timer(user_id)
-    result = settle(timer, now)
-    if result.completed_pomodoro is not None:
-        pomodoro_repo.add(result.completed_pomodoro)
-    if result.timer != timer:
-        timer_repo.save(user_id, result.timer)
-    return result.timer
+    timer, _version = settle_and_persist_with_version(timer_repo, pomodoro_repo, user_id, now)
+    return timer
+
+
+def settle_and_persist_with_version(
+    timer_repo: TimerRepository,
+    pomodoro_repo: PomodoroRepository,
+    user_id: UserId,
+    now: datetime,
+) -> tuple[Timer, int | None]:
+    """Like `settle_and_persist`, also returning the stored row's version.
+
+    Lets a caller that is about to persist a further change of its own (the
+    `/log` route) chain a `save_if_unchanged` against the exact row this call
+    observed, rather than racing a second, independent settle+persist.
+
+    A completed/elapsed phase is persisted via a compare-and-swap write keyed
+    on that version: when two callers observe the same elapsed Timer at once
+    (the app's own concurrent `GET /api/timer` pair on mount, per stories
+    64-68), only the one that wins the CAS inserts the completed Pomodoro; the
+    other re-reads the now-settled row, finds nothing left to settle, and
+    returns without persisting anything a second time.
+    """
+    for _ in range(MAX_SETTLE_CAS_ATTEMPTS):
+        stored = timer_repo.get_with_version(user_id)
+        timer, version = stored if stored is not None else (idle_timer(user_id), None)
+        result = settle(timer, now)
+        if result.timer == timer:
+            return result.timer, version
+        if timer_repo.save_if_unchanged(user_id, version, result.timer):
+            if result.completed_pomodoro is not None:
+                pomodoro_repo.add(result.completed_pomodoro)
+            return result.timer, (0 if version is None else version + 1)
+        # Another request settled or changed the Timer first; retry against
+        # whatever it left behind rather than persisting a second time.
+    stored = timer_repo.get_with_version(user_id)
+    return stored if stored is not None else (idle_timer(user_id), None)
 
 
 def _settle_pomodoro(timer: Timer, now: datetime) -> SettleResult:
@@ -253,13 +289,22 @@ def resume(timer: Timer, now: datetime) -> Timer:
 
 
 def stop(timer: Timer, now: datetime) -> Timer:
-    """PomodoroRunning|PomodoroPaused + stop -> AskingToLog."""
+    """PomodoroRunning|PomodoroPaused + stop -> AskingToLog.
+
+    Records the real wall-clock stop instant in `phase_ended_at`: `log` (which
+    may run arbitrarily later, after the User decides whether to log or
+    discard) needs the actual end instant, not one re-derived from
+    `phase_started_at + accumulated_active_seconds`, which silently excludes
+    every paused gap and so misattributes a Pomodoro paused across local
+    midnight to the wrong calendar day (story 80).
+    """
     _require_phase(timer, TimerPhase.POMODORO_RUNNING, TimerPhase.POMODORO_PAUSED)
     return replace(
         timer,
         phase=TimerPhase.ASKING_TO_LOG,
         accumulated_active_seconds=active_seconds(timer, now),
         running_since=None,
+        phase_ended_at=now,
     )
 
 
@@ -278,8 +323,7 @@ def log(timer: Timer) -> LogResult:
         user_id=timer.user_id,
         task_id=timer.task_id,  # type: ignore[arg-type]
         started_at=timer.phase_started_at,  # type: ignore[arg-type]
-        ended_at=timer.phase_started_at  # type: ignore[operator]
-        + timedelta(seconds=timer.accumulated_active_seconds),
+        ended_at=timer.phase_ended_at,  # type: ignore[arg-type]
         duration_seconds=timer.accumulated_active_seconds,
         status=PomodoroStatus.INTERRUPTED_LOGGED,
     )

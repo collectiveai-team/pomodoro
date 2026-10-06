@@ -159,6 +159,24 @@ class TimerRepository(Protocol):
         """Persist the User's Timer, replacing any previous state."""
         ...
 
+    def get_with_version(self, user_id: UserId) -> tuple[Timer, int] | None:
+        """Return the User's Timer alongside its storage version, or `None` if absent.
+
+        The version is an opaque token for a later `save_if_unchanged`; callers
+        must not infer anything from its value beyond equality.
+        """
+        ...
+
+    def save_if_unchanged(self, user_id: UserId, version: int | None, timer: Timer) -> bool:
+        """Persist `timer` only if the stored row is still at `version`.
+
+        `version=None` means "no row existed yet" at the read this call is
+        paired with. Returns whether this call's write won: `False` means
+        another writer already changed (or created) the row first, and the
+        caller must not treat its own `timer` as persisted.
+        """
+        ...
+
 
 @runtime_checkable
 class PomodoroRepository(Protocol):

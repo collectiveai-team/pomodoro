@@ -29,6 +29,7 @@ from pomodoro.core.auth import (
     hash_session_token,
     validate_email_format,
     validate_password_length,
+    validate_time_zone,
     verify_password,
 )
 from pomodoro.core.clock import Clock
@@ -38,6 +39,7 @@ from pomodoro.core.errors import (
     IncorrectPasswordError,
     InvalidEmailError,
     InvalidPasswordLengthError,
+    InvalidTimeZoneError,
 )
 from pomodoro.core.normalization import normalize_key
 from pomodoro.core.repositories import AuthSessionRepository, UserRepository
@@ -180,7 +182,8 @@ def register(
     try:
         normalized_email = validate_email_format(body.email)
         validate_password_length(body.password)
-    except (InvalidEmailError, InvalidPasswordLengthError) as error:
+        validate_time_zone(body.time_zone)
+    except (InvalidEmailError, InvalidPasswordLengthError, InvalidTimeZoneError) as error:
         limiter.record_failure(key, now)
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(error)) from error
 
@@ -199,7 +202,13 @@ def register(
         alarm_enabled=True,
         notifications_enabled=True,
     )
-    stored = user_repo.add(user, password_hash=hash_password(body.password))
+    try:
+        stored = user_repo.add(user, password_hash=hash_password(body.password))
+    except EmailAlreadyRegisteredError as error:
+        # Lost a race against a concurrent registration of the same email
+        # that passed the pre-check above first; same response as that check.
+        limiter.record_failure(key, now)
+        raise HTTPException(status.HTTP_409_CONFLICT, str(error)) from error
     start_session(response, stored.id, session_repo=session_repo, clock=clock)
     return UserPublic.from_entity(stored)
 

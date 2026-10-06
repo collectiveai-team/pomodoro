@@ -126,6 +126,11 @@ describe("createTimerEngine", () => {
     engine.applySnapshot(nextFetchResult);
     expect(onAlarm).not.toHaveBeenCalled();
 
+    // The real elapsed time a re-fetch triggered by the zero-crossing tick
+    // (or a focus regain after a long absence) would actually see: without
+    // this, the engine can't tell a real natural completion from a Break/
+    // Pomodoro another tab ended early (story 65's shared Timer).
+    clock.advance(1_500_000);
     nextFetchResult = snapshot({
       phase: "ready_for_next",
       remaining_seconds: null,
@@ -150,6 +155,7 @@ describe("createTimerEngine", () => {
     engine.applySnapshot(
       snapshot({ phase: "break_running", break_kind: "short" }),
     );
+    clock.advance(1_500_000);
     await engine.refetch();
 
     expect(onAlarm).toHaveBeenCalledOnce();

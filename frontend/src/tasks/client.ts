@@ -35,6 +35,10 @@ export type DeleteResult =
   | { ok: true }
   | { ok: false; status: number; message: string };
 
+export type TagActionResult =
+  | { ok: true; tag: TagPublic }
+  | { ok: false; status: number; message: string };
+
 async function runTaskAction(
   call: () => Promise<{
     data?: TaskPublic;
@@ -124,6 +128,71 @@ export function editTaskTags(
       }),
     "No se pudieron guardar las etiquetas.",
   );
+}
+
+/** Edit a Task's text through the same validation as creation. */
+export function editTaskText(
+  taskId: number,
+  text: string,
+): Promise<TaskActionResult> {
+  return runTaskAction(
+    () =>
+      apiClient.PATCH("/api/tasks/{task_id}/text", {
+        params: { path: { task_id: taskId } },
+        body: { text },
+      }),
+    "No se pudo editar la tarea.",
+  );
+}
+
+async function runTagAction(
+  call: () => Promise<{
+    data?: TagPublic;
+    error?: unknown;
+    response: Response;
+  }>,
+  fallbackMessage: string,
+): Promise<TagActionResult> {
+  const { data, error, response } = await call();
+  if (data) {
+    return { ok: true, tag: data };
+  }
+  return {
+    ok: false,
+    status: response.status,
+    message: extractErrorMessage(error, fallbackMessage),
+  };
+}
+
+/** Rename a catalog Tag everywhere it is assigned. */
+export function renameTag(
+  tagId: number,
+  name: string,
+): Promise<TagActionResult> {
+  return runTagAction(
+    () =>
+      apiClient.PATCH("/api/tags/{tag_id}", {
+        params: { path: { tag_id: tagId } },
+        body: { name },
+      }),
+    "No se pudo renombrar la etiqueta.",
+  );
+}
+
+/** Delete a catalog Tag and remove it from all of the User's Tasks. */
+export async function deleteTag(tagId: number): Promise<DeleteResult> {
+  const { error, response } = await apiClient.DELETE("/api/tags/{tag_id}", {
+    params: { path: { tag_id: tagId } },
+    headers: { "Content-Type": "application/json" },
+  });
+  if (response.ok) {
+    return { ok: true };
+  }
+  return {
+    ok: false,
+    status: response.status,
+    message: extractErrorMessage(error, "No se pudo borrar la etiqueta."),
+  };
 }
 
 export async function reorderTasks(taskIds: number[]): Promise<ReorderResult> {

@@ -339,7 +339,12 @@ def create_task(
     except (TaskTextEmptyError, TaskTextTooLongError) as error:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(error)) from error
 
-    stored = task_repo.add(draft)
+    try:
+        stored = task_repo.add(draft)
+    except DuplicateActiveTaskTextError as error:
+        # Lost a race against a concurrent create of the same Active Task
+        # text that passed the pre-check above first; same response as that.
+        raise HTTPException(status.HTTP_409_CONFLICT, str(error)) from error
     catalog = tag_repo.list(user.id)
     return _to_public(
         stored,

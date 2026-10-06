@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import col, select
 
 from pomodoro.core.entities import TagId, Task, TaskId, UserId
+from pomodoro.core.errors import DuplicateActiveTaskTextError
 from pomodoro.core.normalization import normalize_key
 from pomodoro.database import tables
 from pomodoro.database.engine import session_scope
@@ -97,7 +99,17 @@ class SQLTaskRepository:
                 archived_at=task.archived_at,
             )
             session.add(row)
-            session.commit()
+            try:
+                session.commit()
+            except IntegrityError as error:
+                # Two concurrent creates can both pass the caller's
+                # `list_active`-based uniqueness pre-check before either
+                # inserts; the partial unique index on (user_id, text_key)
+                # while Active is the last line of defence, and must surface
+                # as the same domain error the pre-check raises rather than
+                # an unhandled database error.
+                session.rollback()
+                raise DuplicateActiveTaskTextError from error
             session.refresh(row)
             _replace_tag_links(session, _require_row_id(row), task.tag_ids)
             session.commit()

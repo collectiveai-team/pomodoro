@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import select
 
 from pomodoro.core.auth import UserRecord
 from pomodoro.core.entities import User, UserId
+from pomodoro.core.errors import EmailAlreadyRegisteredError
 from pomodoro.database import tables
 from pomodoro.database.engine import session_scope
 
@@ -61,7 +63,16 @@ class SQLUserRepository:
                 created_at=user.created_at,
             )
             session.add(row)
-            session.commit()
+            try:
+                session.commit()
+            except IntegrityError as error:
+                # Two concurrent registrations can both pass the caller's
+                # `get_by_email_key` pre-check before either inserts; the
+                # unique index on `email_key` is the last line of defence, and
+                # must surface as the same domain error the pre-check raises
+                # rather than an unhandled database error.
+                session.rollback()
+                raise EmailAlreadyRegisteredError from error
             session.refresh(row)
             return _to_entity(row)
 

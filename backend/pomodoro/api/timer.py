@@ -34,6 +34,7 @@ from pomodoro.core.timer import (
     active_seconds,
     break_duration_seconds,
     discard,
+    idle_timer,
     local_day_bounds_utc,
     log,
     next_pomodoro,
@@ -41,6 +42,7 @@ from pomodoro.core.timer import (
     pomodoros_until_long_break,
     resume,
     settle_and_persist,
+    settle_and_persist_with_version,
     skip_break,
     start_break,
     start_on_task,
@@ -51,6 +53,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 router = APIRouter(prefix="/api/timer", tags=["timer"])
+
+MAX_LOG_CAS_ATTEMPTS = 5
 
 
 UserDep = Annotated[User, Depends(require_session)]
@@ -246,17 +250,27 @@ def log_timer(
     task_repo: TaskRepoDep,
     clock: ClockDep,
 ) -> TimerPublic:
-    """AskingToLog + log -> Idle, persisting the interrupted Pomodoro's real time."""
+    """AskingToLog + log -> Idle, persisting the interrupted Pomodoro's real time.
+
+    Persists through a compare-and-swap write so that two concurrent `/log`
+    calls for the same stopped Pomodoro (two tabs, a retry, a double submit)
+    can't both insert it: only the one that wins the CAS persists; the other
+    re-settles against the now-Idle Timer and gets a 409, the same response
+    an actually-stale tab already gets today.
+    """
     now = clock.now()
-    timer = settle_and_persist(timer_repo, pomodoro_repo, user.id, now)
-    try:
-        result = log(timer)
-    except InvalidTimerActionError as error:
-        raise _conflict(timer, now, _lookup_task(task_repo, user, timer.task_id)) from error
-    if result.pomodoro is not None:
-        pomodoro_repo.add(result.pomodoro)
-    timer_repo.save(user.id, result.timer)
-    return TimerPublic.build(result.timer, now, None)
+    timer = idle_timer(user.id)
+    for _ in range(MAX_LOG_CAS_ATTEMPTS):
+        timer, version = settle_and_persist_with_version(timer_repo, pomodoro_repo, user.id, now)
+        try:
+            result = log(timer)
+        except InvalidTimerActionError as error:
+            raise _conflict(timer, now, _lookup_task(task_repo, user, timer.task_id)) from error
+        if timer_repo.save_if_unchanged(user.id, version, result.timer):
+            if result.pomodoro is not None:
+                pomodoro_repo.add(result.pomodoro)
+            return TimerPublic.build(result.timer, now, None)
+    raise _conflict(timer, now, _lookup_task(task_repo, user, timer.task_id))
 
 
 @router.post("/discard")

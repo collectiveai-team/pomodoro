@@ -180,7 +180,11 @@ def test_log_persists_interrupted_logged_with_real_unpaused_time() -> None:
     assert pomodoro.status is PomodoroStatus.INTERRUPTED_LOGGED
     assert pomodoro.duration_seconds == 45  # 30 + 15, excluding the paused gap
     assert pomodoro.started_at == NOW
-    assert pomodoro.ended_at == NOW + timedelta(seconds=45)
+    # The real stop instant (30 + 1000 + 15 = 1045s later), not
+    # started_at + duration_seconds: that would silently drop the paused gap
+    # and misattribute a Pomodoro paused across local midnight to the wrong
+    # calendar day (story 80).
+    assert pomodoro.ended_at == NOW + timedelta(seconds=1045)
     assert pomodoro.ended_at >= pomodoro.started_at
 
 
@@ -411,12 +415,27 @@ class FakeTimerRepository:
 
     def __init__(self) -> None:
         self._timers: dict[UserId, Timer] = {}
+        self._versions: dict[UserId, int] = {}
 
     def get(self, user_id: UserId) -> Timer | None:
         return self._timers.get(user_id)
 
     def save(self, user_id: UserId, timer: Timer) -> None:
         self._timers[user_id] = timer
+        self._versions[user_id] = self._versions.get(user_id, -1) + 1
+
+    def get_with_version(self, user_id: UserId) -> tuple[Timer, int] | None:
+        timer = self.get(user_id)
+        if timer is None:
+            return None
+        return timer, self._versions[user_id]
+
+    def save_if_unchanged(self, user_id: UserId, version: int | None, timer: Timer) -> bool:
+        current = self._versions.get(user_id)
+        if current != version:
+            return False
+        self.save(user_id, timer)
+        return True
 
 
 class FakePomodoroRepository:
@@ -470,6 +489,12 @@ def test_fake_timer_repository_satisfies_the_protocol() -> None:
     timer = start(idle_timer(USER), TASK, NOW)
     repo.save(USER, timer)
     assert repo.get(USER) == timer
+    observed = repo.get_with_version(USER)
+    assert observed is not None
+    _, version = observed
+    paused = pause(timer, NOW + timedelta(seconds=1))
+    assert repo.save_if_unchanged(USER, version, paused) is True
+    assert repo.save_if_unchanged(USER, version, timer) is False
 
 
 def test_fake_pomodoro_repository_satisfies_the_protocol_and_scopes_counts_per_user() -> None:

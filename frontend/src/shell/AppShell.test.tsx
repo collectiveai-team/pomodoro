@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { useEffect } from "react";
+import { type ReactNode, useEffect } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppShell } from "./AppShell";
 
@@ -32,6 +32,9 @@ vi.mock("@/src/history/HistoryTab", () => ({
 }));
 vi.mock("@/src/timer/TimerPanel", () => ({
   TimerPanel: () => <div>timer</div>,
+}));
+vi.mock("@/src/timer/TimerEngineProvider", () => ({
+  TimerEngineProvider: ({ children }: { children: ReactNode }) => children,
 }));
 vi.mock("@/src/account/AccountMenu", () => ({
   AccountMenu: () => <div>account</div>,

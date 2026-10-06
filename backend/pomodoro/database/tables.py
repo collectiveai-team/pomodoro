@@ -114,3 +114,5 @@ class Timer(SQLModel, table=True):
     phase_started_at: datetime | None = Field(default=None, sa_type=UTCDateTime)
     accumulated_active_seconds: int = 0
     running_since: datetime | None = Field(default=None, sa_type=UTCDateTime)
+    phase_ended_at: datetime | None = Field(default=None, sa_type=UTCDateTime)
+    version: int = 0

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   fetchTagCatalog,
   fetchTaskCounts,
+  type TagPublic,
   type TaskCounts,
   type TaskFilterQuery,
   type TaskListResult,
@@ -21,6 +22,7 @@ export function useFilteredTaskList(
 ) {
   const [tasks, setTasks] = useState<TaskPublic[]>([]);
   const [count, setCount] = useState<number | null>(null);
+  const [tagCatalog, setTagCatalog] = useState<TagPublic[]>([]);
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [textFilter, setTextFilter] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -48,6 +50,7 @@ export function useFilteredTaskList(
 
   const refreshTagCatalog = useCallback(async (): Promise<void> => {
     const catalog = await fetchTagCatalog();
+    setTagCatalog(catalog);
     setAvailableTags(catalog.map((tag) => tag.name));
   }, []);
 
@@ -75,6 +78,7 @@ export function useFilteredTaskList(
     tasks,
     setTasks,
     count,
+    tagCatalog,
     availableTags,
     textFilter,
     setTextFilter,

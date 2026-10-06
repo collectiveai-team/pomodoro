@@ -50,4 +50,12 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s \
     CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"]
 
-CMD ["uvicorn", "pomodoro.entrypoints.app:app", "--host", "0.0.0.0", "--port", "8000"]
+# --forwarded-allow-ips=* trusts X-Forwarded-For/X-Forwarded-Proto from any
+# peer that can reach this process. Safe here specifically because this
+# container publishes no port (docker-compose.yml): the frontend's
+# server-side rewrite (frontend/proxy.ts) is the only thing that can ever
+# open a connection to it. Without this, uvicorn's ProxyHeadersMiddleware
+# defaults to trusting only 127.0.0.1 and silently ignores the header
+# entirely, which collapsed the login/register rate limiter's per-IP key to
+# one constant value for every caller (`api/auth.py`'s `_rate_limit_key`).
+CMD ["uvicorn", "pomodoro.entrypoints.app:app", "--host", "0.0.0.0", "--port", "8000", "--forwarded-allow-ips=*"]

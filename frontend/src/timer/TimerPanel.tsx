@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { SettingsToggles } from "@/src/settings/SettingsToggles";
 import { useSettingsPreferences } from "@/src/settings/useSettingsPreferences";
 import {
@@ -16,11 +16,8 @@ import {
   stopTimer,
   type TimerActionResult,
 } from "./client";
-import {
-  createTimerEngine,
-  type TimerEngine,
-  type TimerSnapshot,
-} from "./engine";
+import type { TimerSnapshot } from "./engine";
+import { useTimerEngine } from "./TimerEngineProvider";
 
 /**
  * The Timer panel: ring + phase + in-progress Task, phase-appropriate
@@ -28,15 +25,15 @@ import {
  *
  * All countdown math and server resync (focus/visibility regain, the
  * zero-crossing re-fetch, natural-completion-only alarms) is T21's
- * `createTimerEngine`; this component only renders its snapshots and calls
+ * `createTimerEngine`, shared with `ActiveTab` through one `TimerEngineProvider`
+ * instance (`AppShell`) so an action taken from either place is immediately
+ * visible in both; this component only renders the shared snapshot and calls
  * the `/api/timer/*` action wrappers in `./client`.
  */
 
 const POMODORO_DURATION_SECONDS = 25 * 60;
 const SHORT_BREAK_SECONDS = 5 * 60;
 const LONG_BREAK_SECONDS = 10 * 60;
-
-const RUNNING_PHASES = new Set(["pomodoro_running", "break_running"]);
 
 function breakLabel(breakKind: string | null): string {
   if (breakKind === "long") {
@@ -95,11 +92,10 @@ function formatClock(totalSeconds: number | null): string {
 }
 
 export function TimerPanel() {
-  const engineRef = useRef<TimerEngine | null>(null);
+  const { snapshot, remainingSeconds, applyActionResult, subscribeAlarm } =
+    useTimerEngine();
   const settings = useSettingsPreferences();
   const latestSnapshotRef = useRef<TimerSnapshot | null>(null);
-  const [snapshot, setSnapshot] = useState<TimerSnapshot | null>(null);
-  const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
   const [summary, setSummary] = useState<DaySummary | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -110,36 +106,25 @@ export function TimerPanel() {
     null,
   );
 
-  const refreshSummary = useCallback(() => {
+  useEffect(() => {
+    latestSnapshotRef.current = snapshot;
     void fetchDaySummary().then((next) => {
       if (next) {
         setSummary(next);
       }
     });
-  }, []);
+  }, [snapshot]);
 
-  useEffect(() => {
-    const engine = createTimerEngine({
-      onSnapshot: (next) => {
-        latestSnapshotRef.current = next;
-        setSnapshot(next);
-        setRemainingSeconds(engine.getRemainingSeconds());
-        refreshSummary();
-      },
-      onAlarm: () => {
+  useEffect(
+    () =>
+      subscribeAlarm(() => {
         const phase = latestSnapshotRef.current
           ? phaseLabel(latestSnapshotRef.current)
           : "Pomodoro";
         settings.triggerPhaseEndEffects(phase);
-      },
-    });
-    engineRef.current = engine;
-    void engine.refetch();
-    return () => {
-      engine.dispose();
-      engineRef.current = null;
-    };
-  }, [refreshSummary, settings.triggerPhaseEndEffects]);
+      }),
+    [subscribeAlarm, settings.triggerPhaseEndEffects],
+  );
 
   // Unlocks the Alarm's autoplay on the first real user gesture anywhere in
   // the panel, per the browser's autoplay policy (story 72).
@@ -157,24 +142,6 @@ export function TimerPanel() {
     };
   }, [settings.unlockAlarm]);
 
-  // Only ticks (and locally decays the displayed countdown) while a phase is
-  // actually running; a paused phase's remaining_seconds is already frozen
-  // server-side, so ticking it here would wrongly count paused time.
-  useEffect(() => {
-    if (!snapshot || !RUNNING_PHASES.has(snapshot.phase)) {
-      return;
-    }
-    const interval = setInterval(() => {
-      const engine = engineRef.current;
-      if (!engine) {
-        return;
-      }
-      engine.tick();
-      setRemainingSeconds(engine.getRemainingSeconds());
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [snapshot]);
-
   async function runAction(
     action: () => Promise<TimerActionResult>,
   ): Promise<void> {
@@ -183,13 +150,13 @@ export function TimerPanel() {
     const result = await action();
     setPending(false);
     if (result.ok) {
-      engineRef.current?.applyActionResult(result.timer);
+      applyActionResult(result.timer);
       return;
     }
     if (result.timer) {
       // A 409 from a stale tab carries the already-current Timer: resync
       // silently instead of showing an error (story 68).
-      engineRef.current?.applyActionResult(result.timer);
+      applyActionResult(result.timer);
       return;
     }
     setError(result.message);
