@@ -529,6 +529,12 @@ export interface paths {
     /**
      * Log Timer
      * @description AskingToLog + log -> Idle, persisting the interrupted Pomodoro's real time.
+     *
+     *     Persists through a compare-and-swap write so that two concurrent `/log`
+     *     calls for the same stopped Pomodoro (two tabs, a retry, a double submit)
+     *     can't both insert it: only the one that wins the CAS persists; the other
+     *     re-settles against the now-Idle Timer and gets a 409, the same response
+     *     an actually-stale tab already gets today.
      */
     post: operations["log_timer_api_timer_log_post"];
     delete?: never;
