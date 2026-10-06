@@ -39,7 +39,13 @@ jobs:
     name: gates
     runs-on: ubuntu-latest
     steps:
-      - uses: $/.github/actions/setup-backend
+      - &checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - &setup-backend
+        uses: ./.github/actions/setup-backend
         with:
           uv-version: ${{ env.UV_VERSION }}
 
@@ -70,9 +76,8 @@ jobs:
     needs: gates
     runs-on: ubuntu-latest
     steps:
-      - uses: $/.github/actions/setup-backend
-        with:
-          uv-version: ${{ env.UV_VERSION }}
+      - *checkout
+      - *setup-backend
 
       # pytest-randomly (dependency-groups.dev) randomizes test order on every run.
       # "not integration" is today's equivalent of the `unit` marker suite: no test
@@ -102,9 +107,8 @@ jobs:
     env:
       DATABASE_URL: postgresql+psycopg://pomodoro:pomodoro@localhost:5432/pomodoro
     steps:
-      - uses: $/.github/actions/setup-backend
-        with:
-          uv-version: ${{ env.UV_VERSION }}
+      - *checkout
+      - *setup-backend
 
       - name: alembic upgrade head (PostgreSQL, from zero)
         run: uv run alembic upgrade head

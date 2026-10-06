@@ -1,5 +1,5 @@
 name: setup-frontend
-description: Checkout the repo and install frontend dependencies with pnpm
+description: Install frontend dependencies with pnpm (run after actions/checkout)
 
 inputs:
   node-version:
@@ -9,10 +9,6 @@ inputs:
 runs:
   using: composite
   steps:
-    - uses: actions/checkout@v7
-      with:
-        persist-credentials: false
-
     - name: Enable corepack
       shell: bash
       run: corepack enable

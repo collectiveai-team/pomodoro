@@ -39,11 +39,15 @@ jobs:
     name: api-client-drift
     runs-on: ubuntu-latest
     steps:
-      - uses: $/.github/actions/setup-backend
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-backend
         with:
           uv-version: ${{ env.UV_VERSION }}
 
-      - uses: $/.github/actions/setup-frontend
+      - uses: ./.github/actions/setup-frontend
         with:
           node-version: ${{ env.NODE_VERSION }}
 
