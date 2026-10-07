@@ -52,3 +52,13 @@ def test_app_image_runs_as_non_root() -> None:
     user_lines = [line for line in dockerfile.splitlines() if line.startswith("USER ")]
     assert user_lines, "deploy/Dockerfile must drop root"
     assert user_lines[-1].split()[1].split(":")[0] not in {"0", "root"}
+
+
+TERRAFORM_DIR = DEPLOY_DIR / "terraform"
+
+
+@pytest.mark.unit
+def test_workload_identity_only_accepts_this_repository() -> None:
+    shared = (TERRAFORM_DIR / "shared.tf").read_text()
+    # CEL evaluated by Google, so the repository is interpolated into a quoted string literal.
+    assert '"assertion.repository == \\"${var.github_repository}\\""' in shared

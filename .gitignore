@@ -14,3 +14,8 @@ __pycache__/
 .venv/
 .pytest_cache/
 .ruff_cache/
+
+# Terraform
+deploy/terraform/.terraform/
+deploy/terraform/*.tfstate*
+deploy/terraform/terraform.tfvars
