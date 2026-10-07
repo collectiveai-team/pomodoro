@@ -1,0 +1,13 @@
+# Context for deploy/Dockerfile: only what it copies.
+**
+!pyproject.toml
+!uv.lock
+!alembic.ini
+!backend/
+!frontend/
+!deploy/nginx.conf.template
+!deploy/entrypoint.sh
+**/__pycache__/
+**/*.py[cod]
+frontend/node_modules/
+frontend/.next/

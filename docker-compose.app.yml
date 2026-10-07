@@ -1,0 +1,46 @@
+# The single Cloud Run image (deploy/Dockerfile) against a local Postgres, to test it exactly as
+# it runs in Cloud Run. Separate project name so it never shares volumes with docker-compose.yml.
+#
+#   docker compose -f docker-compose.app.yml up -d --build --wait
+name: pomodoro-app
+
+x-app-image: &app-image
+  build:
+    context: .
+    dockerfile: deploy/Dockerfile
+  image: pomodoro-app:local
+  environment:
+    DATABASE_URL: postgresql+psycopg://pomodoro:pomodoro@db:5432/pomodoro
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: pomodoro
+      POSTGRES_PASSWORD: pomodoro
+      POSTGRES_DB: pomodoro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pomodoro -d pomodoro"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  migrate:
+    <<: *app-image
+    entrypoint: ["/app/backend/scripts/migrate.sh"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  app:
+    <<: *app-image
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/api/health', timeout=2)"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
