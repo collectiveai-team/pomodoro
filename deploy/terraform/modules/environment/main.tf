@@ -89,7 +89,10 @@ resource "google_cloud_run_v2_service" "app" {
     ignore_changes = [template[0].containers[0].image, client, client_version]
   }
 
-  depends_on = [google_secret_manager_secret_iam_member.runtime_reads_database_url]
+  depends_on = [
+    google_secret_manager_secret_iam_member.runtime_reads_database_url,
+    google_secret_manager_secret_version.database_url,
+  ]
 }
 
 resource "google_cloud_run_v2_service_iam_member" "public" {
@@ -131,7 +134,10 @@ resource "google_cloud_run_v2_job" "migrate" {
     ignore_changes = [template[0].template[0].containers[0].image, client, client_version]
   }
 
-  depends_on = [google_secret_manager_secret_iam_member.runtime_reads_database_url]
+  depends_on = [
+    google_secret_manager_secret_iam_member.runtime_reads_database_url,
+    google_secret_manager_secret_version.database_url,
+  ]
 }
 
 # The deployer may change images and run the job; it cannot touch IAM or the rest of the shape.

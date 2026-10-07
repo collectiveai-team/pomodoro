@@ -94,3 +94,12 @@ def test_runtime_identity_reads_only_its_own_secret() -> None:
     main = (TERRAFORM_DIR / "modules" / "environment" / "main.tf").read_text()
     assert "google_secret_manager_secret_iam_member" in main
     assert "google_project_iam_member" not in main
+
+
+@pytest.mark.unit
+def test_cloud_run_resources_wait_for_the_secret_version() -> None:
+    """Revisions resolve secret version "latest" on create, so it must already exist."""
+    main = (TERRAFORM_DIR / "modules" / "environment" / "main.tf").read_text()
+    depends = re.findall(r"depends_on\s*=\s*\[([^\]]*)\]", main)
+    with_version = [d for d in depends if "google_secret_manager_secret_version.database_url" in d]
+    assert len(with_version) == 2
