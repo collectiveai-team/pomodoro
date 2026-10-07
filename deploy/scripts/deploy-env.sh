@@ -22,9 +22,14 @@ echo "::endgroup::"
 
 echo "::group::deploy candidate (${service})"
 gcloud run deploy "$service" --region "$region" --image "$image" --no-traffic --tag candidate --quiet
-candidate_url=$(gcloud run services describe "$service" --region "$region" \
-  --format='value(status.traffic.filter(tag=candidate).url)')
+candidate_url=$(gcloud run services describe "$service" --region "$region" --format=json \
+  | jq -r '.status.traffic[] | select(.tag == "candidate") | .url // empty')
 echo "::endgroup::"
+
+if [ -z "$candidate_url" ]; then
+  echo "deploy-env: no URL for the candidate tag on ${service}; traffic left on the previous revision" >&2
+  exit 1
+fi
 
 "$script_dir/smoke.sh" "$candidate_url"
 

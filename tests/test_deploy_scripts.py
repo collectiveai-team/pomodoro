@@ -88,7 +88,10 @@ case "$*" in
   *"$FAIL_ON"*) [ -n "$FAIL_ON" ] && exit 1 ;;
 esac
 case "$*" in
-  "run services describe"*"status.traffic"*) echo "$CANDIDATE_URL" ;;
+  "run services describe"*"--format=json"*)
+    echo '{"status":{"traffic":[{"percent":100,"revisionName":"old"},'\
+'{"tag":"other","url":"http://127.0.0.1:9"},'\
+'{"tag":"candidate","url":"'"$CANDIDATE_URL"'"}]}}' ;;
   "run services describe"*"status.url"*) echo "https://service.example" ;;
 esac
 exit 0
@@ -129,6 +132,9 @@ def test_deploy_migrates_then_deploys_without_traffic_then_promotes(
     result = _run("deploy-env.sh", IMAGE, env={**fake_gcloud, "CANDIDATE_URL": healthy_app})
     assert result.returncode == 0, result.stderr
     calls = _calls(fake_gcloud)
+    assert any(
+        c.startswith("run services describe pomodoro-qa") and "--format=json" in c for c in calls
+    )
     order = [
         next(i for i, c in enumerate(calls) if c.startswith("run jobs update pomodoro-qa-migrate")),
         next(
@@ -246,3 +252,11 @@ def test_verify_release_rejects_a_missing_image(
     result = _verify(repo, on_main, {**fake_gcloud, "FAIL_ON": "artifacts docker images describe"})
     assert result.returncode != 0
     assert "no image" in result.stderr
+
+
+@pytest.mark.unit
+def test_missing_candidate_url_fails_before_traffic_moves(fake_gcloud: Mapping[str, str]) -> None:
+    result = _run("deploy-env.sh", IMAGE, env={**fake_gcloud, "CANDIDATE_URL": ""})
+    assert result.returncode != 0
+    assert "candidate" in result.stderr
+    assert not any("update-traffic" in c for c in _calls(fake_gcloud))
