@@ -14,6 +14,12 @@ on:
       - "uv.lock"
       - "tests/test_app_image.py"
       - ".github/workflows/deploy-ci.yml"
+      - ".github/workflows/deploy.yml"
+      - ".github/actions/deploy-env/**"
+      - ".github/actions/setup-backend/**"
+      - "docs/deploy.md"
+      - "tests/test_deploy_config.py"
+      - "tests/test_deploy_scripts.py"
 
 concurrency:
   group: deploy-ci-${{ github.ref }}
@@ -31,12 +37,15 @@ jobs:
   app-image:
     name: app-image
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v7
+      - &checkout
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
-      - uses: ./.github/actions/setup-backend
+      - &setup-backend
+        uses: ./.github/actions/setup-backend
         with:
           uv-version: ${{ env.UV_VERSION }}
 
@@ -57,16 +66,25 @@ jobs:
         if: always()
         run: docker compose -f docker-compose.app.yml down -v
 
+  deploy-guards:
+    name: deploy-guards
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - *checkout
+      - *setup-backend
+      - name: Deploy guard tests
+        run: uv run pytest tests/test_deploy_config.py tests/test_deploy_scripts.py -q
+
   terraform:
     name: terraform
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: deploy/terraform
     steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
+      - *checkout
 
       - uses: hashicorp/setup-terraform@v3
         with:

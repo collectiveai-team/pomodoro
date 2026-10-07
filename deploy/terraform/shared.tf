@@ -51,10 +51,14 @@ resource "google_iam_workload_identity_pool_provider" "github" {
   workload_identity_pool_id          = google_iam_workload_identity_pool.github.workload_identity_pool_id
   workload_identity_pool_provider_id = "pomodoro"
   attribute_mapping = {
-    "google.subject"       = "assertion.sub"
-    "attribute.repository" = "assertion.repository"
+    "google.subject"        = "assertion.sub"
+    "attribute.repository"  = "assertion.repository"
+    "attribute.ref"         = "assertion.ref"
+    "attribute.environment" = "assertion.environment"
   }
-  attribute_condition = "assertion.repository == \"${var.github_repository}\""
+  # Build and QA run on main; prod runs in the `prod` environment (v* tags, required reviewers).
+  # No other workflow or ref in the repository can impersonate the deployer.
+  attribute_condition = "assertion.repository == \"${var.github_repository}\" && (assertion.ref == \"refs/heads/main\" || (has(assertion.environment) && assertion.environment == \"prod\"))"
   oidc {
     issuer_uri = "https://token.actions.githubusercontent.com"
   }

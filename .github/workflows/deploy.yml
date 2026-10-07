@@ -12,6 +12,12 @@ on:
 
 permissions: {}
 
+# One run per event type at a time, never cancelled: a newer push's pending run replaces an older
+# pending one, so builds and QA deploys land in order.
+concurrency:
+  group: deploy-${{ github.event_name }}
+  cancel-in-progress: false
+
 env:
   IMAGE_REPOSITORY: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/pomodoro/pomodoro-app
 
@@ -19,6 +25,7 @@ jobs:
   build:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
       id-token: write
@@ -51,6 +58,7 @@ jobs:
   deploy-qa:
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     environment:
       name: qa
       url: ${{ steps.deploy.outputs.url }}
@@ -76,8 +84,9 @@ jobs:
           migrate-job-name: ${{ vars.MIGRATE_JOB_NAME }}
 
   deploy-prod:
-    if: github.event_name == 'release'
+    if: github.event_name == 'release' && !github.event.release.prerelease
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     environment:
       name: prod
       url: ${{ steps.deploy.outputs.url }}

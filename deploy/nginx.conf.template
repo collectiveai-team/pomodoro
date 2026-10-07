@@ -28,8 +28,9 @@ http {
   proxy_set_header Connection "";
   proxy_set_header Host $host;
   proxy_set_header X-Forwarded-Proto $forwarded_proto;
-  # uvicorn trusts only 127.0.0.1 (us) and takes the right-most untrusted hop: the peer nginx saw,
-  # never an address the client wrote into the header.
+  # Assumption: uvicorn trusts only 127.0.0.1 (us) and takes the right-most untrusted hop, which on
+  # Cloud Run should be the peer nginx saw, never an address the client wrote into the header.
+  # To be verified in QA (docs/deploy.md, "Verificación del rate limit en QA").
   proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
 
   server {

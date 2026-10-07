@@ -18,6 +18,10 @@ variable "github_repository" {
 variable "prod_reviewer_users" {
   type        = list(string)
   description = "GitHub logins that must approve every prod deploy."
+  validation {
+    condition     = length(var.prod_reviewer_users) > 0
+    error_message = "prod_reviewer_users must list at least one GitHub login."
+  }
 }
 
 variable "environments" {

@@ -140,7 +140,7 @@ resource "google_cloud_run_v2_job" "migrate" {
   ]
 }
 
-# The deployer may change images and run the job; it cannot touch IAM or the rest of the shape.
+# The deployer may change images and run the job; it cannot change IAM. Drift in the rest of the shape shows up in `terraform plan`.
 resource "google_cloud_run_v2_service_iam_member" "deployer" {
   name     = google_cloud_run_v2_service.app.name
   location = var.region

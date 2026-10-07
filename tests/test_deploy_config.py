@@ -27,6 +27,9 @@ def test_entrypoint_keeps_uvicorn_default_proxy_trust() -> None:
     entrypoint = (DEPLOY_DIR / "entrypoint.sh").read_text()
     assert "--forwarded-allow-ips" not in entrypoint
     assert "FORWARDED_ALLOW_IPS" not in entrypoint
+    # Pre-written fix, applied only if QA shows the key collapsed to Google's front end.
+    runbook = (REPO_ROOT / "docs" / "deploy.md").read_text()
+    assert "FORWARDED_ALLOW_IPS=169.254.0.0/16" in runbook
 
 
 @pytest.mark.unit
@@ -61,7 +64,15 @@ TERRAFORM_DIR = DEPLOY_DIR / "terraform"
 def test_workload_identity_only_accepts_this_repository() -> None:
     shared = (TERRAFORM_DIR / "shared.tf").read_text()
     # CEL evaluated by Google, so the repository is interpolated into a quoted string literal.
-    assert '"assertion.repository == \\"${var.github_repository}\\""' in shared
+    assert 'assertion.repository == \\"${var.github_repository}\\"' in shared
+    assert '"attribute.ref"         = "assertion.ref"' in shared
+    assert '"attribute.environment" = "assertion.environment"' in shared
+    # Only main (build + QA) or the reviewer-gated prod environment may impersonate the deployer.
+    assert 'assertion.ref == \\"refs/heads/main\\"' in shared
+    assert 'has(assertion.environment) && assertion.environment == \\"prod\\"' in shared
+    member = re.search(r'member\s+=\s+"(principalSet://[^"]+)"', shared)
+    assert member
+    assert member.group(1).endswith("/attribute.repository/${var.github_repository}")
 
 
 @pytest.mark.unit
@@ -136,8 +147,42 @@ def test_prod_deploy_never_builds_an_image() -> None:
 def test_deploy_workflow_has_no_default_permissions_and_never_cancels_a_deploy() -> None:
     deploy = (WORKFLOWS / "deploy.yml").read_text()
     assert "\npermissions: {}\n" in deploy
-    assert deploy.count("cancel-in-progress: false") == 2
+    assert deploy.count("cancel-in-progress: false") == 3
     assert "cancel-in-progress: true" not in deploy
+    assert re.search(r"\nconcurrency:\n  group: deploy-\$\{\{ github.event_name \}\}\n", deploy)
+    assert deploy.count("timeout-minutes:") == 3
+    assert "!github.event.release.prerelease" in deploy
+
+
+@pytest.mark.unit
+def test_deploy_ci_runs_guards_on_deploy_only_changes() -> None:
+    ci = (WORKFLOWS / "deploy-ci.yml").read_text()
+    assert "deploy-guards:" in ci
+    assert "tests/test_deploy_config.py tests/test_deploy_scripts.py" in ci
+    for path in (
+        ".github/workflows/deploy.yml",
+        ".github/actions/deploy-env/**",
+        ".github/actions/setup-backend/**",
+        "docs/deploy.md",
+        "tests/test_deploy_config.py",
+        "tests/test_deploy_scripts.py",
+    ):
+        assert f'"{path}"' in ci
+    assert ci.count("timeout-minutes:") == 3
+
+
+@pytest.mark.unit
+def test_prod_reviewers_cannot_be_empty() -> None:
+    variables = (TERRAFORM_DIR / "variables.tf").read_text()
+    block = variables.split('variable "prod_reviewer_users"', 1)[1].split("\nvariable ", 1)[0]
+    assert "length(var.prod_reviewer_users) > 0" in block
+
+
+@pytest.mark.unit
+def test_image_context_excludes_untracked_secrets_and_data() -> None:
+    ignore = (DEPLOY_DIR / "Dockerfile.dockerignore").read_text().splitlines()
+    for pattern in ("**/.env*", "**/*.db", "**/.tmp/", "**/.venv/", "**/node_modules/"):
+        assert pattern in ignore
 
 
 @pytest.mark.unit

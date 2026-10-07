@@ -25,15 +25,18 @@ Compartido: repositorio de Artifact Registry `pomodoro` (imagen `pomodoro-app`, 
 `pomodoro-deployer` y un Workload Identity Pool que solo acepta el repositorio `collectiveai-team/pomodoro`.
 Terraform (`deploy/terraform/`) declara GCP, Neon y los GitHub Environments y variables de Actions.
 
-Flujo: push a `main` construye la imagen una vez y la despliega a QA (`build` + `deploy-qa`). Publicar un Release `v*`
+Los prereleases de GitHub no se despliegan a prod. Flujo: push a `main` construye la imagen una vez y la despliega a QA (`build` + `deploy-qa`). Publicar un Release `v*`
 despliega esa misma imagen a prod (`deploy-prod`, con aprobación); prod nunca reconstruye. Cada deploy
 (`deploy/scripts/deploy-env.sh`) migra con el job, despliega una revisión sin tráfico con tag `candidate`, corre el
 smoke (`smoke.sh`) contra su URL y solo entonces mueve el 100% del tráfico.
 
 Notas de seguridad y datos:
 
-- **Un solo deployer.** `pomodoro-deployer` puede actuar como ambas SAs de runtime. La separación entre QA y prod
-  descansa en los revisores requeridos del environment `prod` de GitHub y en su política de tags `v*`, no en IAM.
+- **Un solo deployer.** `pomodoro-deployer` puede actuar como ambas SAs de runtime. La separación entre QA y prod no
+  la da IAM sino tres piezas juntas: (1) la condición del Workload Identity Provider, que solo acepta tokens del
+  repositorio con `ref == refs/heads/main` (build y `deploy-qa`) o `environment == prod` (`deploy-prod`), así que ningún
+  otro workflow ni rama puede suplantar al deployer; (2) los revisores requeridos del environment `prod`; (3) su
+  política de tags `v*`. Debilitar cualquiera de las tres abre un bypass a prod.
 - **La branch `qa` de Neon se crea desde `prod`**, así que también contiene el rol y la base `pomodoro` de prod (con la
   contraseña de prod y una copia de los datos al momento del branch). La app en QA usa solo `pomodoro_qa`, pero quien
   tenga acceso a la consola de la branch `qa` ve esa copia.
@@ -48,7 +51,7 @@ Notas de seguridad y datos:
   Enterprise); sin él, `apply` falla al crear `prod` o la aprobación no se exige.
 - Protección de `main`: debería exigir los checks de CI. Los workflows de CI filtran por paths, y un workflow filtrado no
   reporta en los PR que no tocan sus paths. Marcar como requeridos solo los checks que siempre corren, o aceptar que
-  GitHub los muestre como pendientes ("expected"). Los de `deploy-ci` son `app-image` y `terraform`.
+  GitHub los muestre como pendientes ("expected"). Los de `deploy-ci` son `app-image`, `deploy-guards` y `terraform`.
 
 ## Bootstrap
 
@@ -85,9 +88,14 @@ terraform apply tfplan
 
 `bootstrap` arranca sin migraciones (el health no toca la base); el primer deploy migra. Después del primer deploy por
 el pipeline, correr `terraform plan` una vez y confirmar que no muestra drift en los servicios de Cloud Run (el pipeline
-cambia la imagen, el tráfico y los tags; Terraform los ignora).
+cambia la imagen, el tráfico y los tags). Terraform ignora solo los campos de imagen y de cliente; el tráfico y los tags
+no se ignoran, así que este `plan` confirma que no los revierte. Nunca aplicar un plan que cambie el tráfico: movería
+el servicio fuera de la revisión desplegada por el pipeline.
 
 ## Primer deploy
+
+El Terraform apply (y la imagen `bootstrap`) deben estar hechos **antes** de mergear esta rama: el merge a `main`
+dispara `deploy.yml`, que necesita las variables de Actions, el repositorio de imágenes y los servicios ya creados.
 
 Merge a `main`: el workflow `deploy` corre `build` y `deploy-qa`. La URL queda en el environment `qa` del run o en:
 
@@ -110,9 +118,20 @@ done   # esperado: 401 x5, luego 429
 
 Si no da 429: aplicar el plan B del spec (nginx reemplaza `X-Forwarded-For` en lugar de agregar) y repetir.
 
-Detrás de Cloud Run, el backend puede clavar el limitador en la dirección del front-end de Google que ve nginx, y no en
-la IP real del cliente. En ese caso el límite pasa a ser efectivamente por email: un tercero podría bloquear la cuenta de
-un usuario concreto. Anotar abajo el comportamiento observado y la fecha.
+El loop anterior no detecta que la clave del limitador colapse a la dirección del front-end de Google que ve nginx
+(todas las peticiones compartirían clave y también darían 429). Paso de observación: con `ratelimit@example.com` ya
+bloqueado (6 intentos fallidos) desde una red, intentar un login con el mismo email desde otra red/IP (hotspot del
+teléfono o Cloud Shell).
+
+- Si **no** da 429 (da 401): la clave es la IP real del cliente. Correcto.
+- Si **también** da 429: la clave colapsó a la dirección del proxy y el límite es efectivamente por email (un tercero
+  podría bloquear a un usuario concreto). Fix, ya decidido y todavía no aplicado: definir
+  `FORWARDED_ALLOW_IPS=169.254.0.0/16` para uvicorn en `deploy/entrypoint.sh` (o como env en Terraform) para que tome la
+  IP de cliente que agrega Google. Luego repetir el loop con `X-Forwarded-For` falsos (debe seguir dando 429 al sexto) y
+  la prueba de dos redes (la segunda red NO debe dar 429), y actualizar el guard
+  `test_entrypoint_keeps_uvicorn_default_proxy_trust`.
+
+Anotar abajo el comportamiento observado y la fecha.
 
 Resultado observado: _pendiente (sin ejecutar todavía)_.
 
@@ -141,13 +160,13 @@ El próximo deploy vuelve a `--to-latest`. Las migraciones no se revierten: por 
 QA usa rol y base propios (`pomodoro_qa`), así que se copian datos, no la branch:
 
 ```bash
-read -rs PROD_URL; read -rs QA_URL   # URLs libpq: postgresql://...?sslmode=require (sin +psycopg)
-pg_dump --format=custom --no-owner "$PROD_URL" > prod.dump
-pg_restore --clean --if-exists --no-owner --role=pomodoro_qa --dbname "$QA_URL" prod.dump
+read -rs PROD_DB_URL; read -rs QA_DB_URL   # URLs libpq: postgresql://...?sslmode=require (sin +psycopg)
+pg_dump --format=custom --no-owner "$PROD_DB_URL" > prod.dump
+pg_restore --clean --if-exists --no-owner --role=pomodoro_qa --dbname "$QA_DB_URL" prod.dump
 rm prod.dump
 ```
 
-Los URLs se leen de Secret Manager (`gcloud secrets versions access latest --secret pomodoro-prod-database-url`) y se
+Las URLs se leen de Secret Manager (`gcloud secrets versions access latest --secret pomodoro-prod-database-url`) y se
 les quita `+psycopg`; no pegarlos en la shell history. Recordar que la branch `qa` de Neon conserva además una copia
 antigua de prod (ver Arquitectura).
 
@@ -157,7 +176,10 @@ antigua de prod (ver Arquitectura).
   estado lea la nueva contraseña y `terraform apply` para regrabar el secreto `pomodoro-<env>-database-url`. Revisar el
   plan antes de aplicar.
 - **Nueva versión de un secreto**: redeploy para que se tome (`version = "latest"` se resuelve al arrancar la instancia),
-  por ejemplo re-ejecutando el workflow `deploy` o forzando una revisión nueva.
+  forzando una revisión nueva:
+  `gcloud run services update pomodoro-<env> --region southamerica-east1 --update-labels=rotated=$(date +%s)`.
+  QA también se actualiza con el siguiente push a `main`; prod solo se redespliega con un release, así que ahí el
+  comando es la vía normal.
 - **`NEON_API_KEY` y `GITHUB_TOKEN`**: solo se usan en `apply`; revocarlos después si son de uso único.
 
 ## Subir max-instances
