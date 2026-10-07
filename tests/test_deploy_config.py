@@ -103,3 +103,19 @@ def test_cloud_run_resources_wait_for_the_secret_version() -> None:
     depends = re.findall(r"depends_on\s*=\s*\[([^\]]*)\]", main)
     with_version = [d for d in depends if "google_secret_manager_secret_version.database_url" in d]
     assert len(with_version) == 2
+
+
+@pytest.mark.unit
+def test_prod_environment_requires_reviewers_and_release_tags() -> None:
+    github = (TERRAFORM_DIR / "github.tf").read_text()
+    assert "reviewers {" in github
+    assert re.search(r'tag_pattern\s+=\s+"v\*"', github)
+    for name in (
+        "GCP_PROJECT_ID",
+        "GCP_REGION",
+        "WIF_PROVIDER",
+        "DEPLOYER_SA",
+        "SERVICE_NAME",
+        "MIGRATE_JOB_NAME",
+    ):
+        assert name in github
