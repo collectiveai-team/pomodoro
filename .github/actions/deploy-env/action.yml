@@ -1,0 +1,39 @@
+name: deploy-env
+description: Authenticate through WIF and run deploy/scripts/deploy-env.sh for one environment.
+
+inputs:
+  image:
+    required: true
+  workload-identity-provider:
+    required: true
+  service-account:
+    required: true
+  region:
+    required: true
+  service-name:
+    required: true
+  migrate-job-name:
+    required: true
+
+outputs:
+  url:
+    value: ${{ steps.deploy.outputs.url }}
+
+runs:
+  using: composite
+  steps:
+    - uses: google-github-actions/auth@v3
+      with:
+        workload_identity_provider: ${{ inputs.workload-identity-provider }}
+        service_account: ${{ inputs.service-account }}
+
+    - uses: google-github-actions/setup-gcloud@v3
+
+    - id: deploy
+      shell: bash
+      env:
+        IMAGE: ${{ inputs.image }}
+        GCP_REGION: ${{ inputs.region }}
+        SERVICE_NAME: ${{ inputs.service-name }}
+        MIGRATE_JOB_NAME: ${{ inputs.migrate-job-name }}
+      run: deploy/scripts/deploy-env.sh "$IMAGE"

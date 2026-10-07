@@ -119,3 +119,22 @@ def test_prod_environment_requires_reviewers_and_release_tags() -> None:
         "MIGRATE_JOB_NAME",
     ):
         assert name in github
+
+
+WORKFLOWS = REPO_ROOT / ".github" / "workflows"
+
+
+@pytest.mark.unit
+def test_prod_deploy_never_builds_an_image() -> None:
+    deploy = (WORKFLOWS / "deploy.yml").read_text()
+    prod_job = deploy.split("  deploy-prod:", 1)[1]
+    assert "docker build" not in prod_job
+    assert "verify-release.sh" in prod_job
+
+
+@pytest.mark.unit
+def test_deploy_workflow_has_no_default_permissions_and_never_cancels_a_deploy() -> None:
+    deploy = (WORKFLOWS / "deploy.yml").read_text()
+    assert "\npermissions: {}\n" in deploy
+    assert deploy.count("cancel-in-progress: false") == 2
+    assert "cancel-in-progress: true" not in deploy
