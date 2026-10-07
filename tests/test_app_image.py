@@ -92,3 +92,50 @@ def test_sigterm_shuts_down_cleanly_before_the_kill_timeout() -> None:
         assert _exit_code_after(name) != 137
     finally:
         _docker("rm", "-f", name)
+
+
+def _register(email: str, password: str) -> None:
+    response = httpx.post(
+        f"{BASE_URL}/api/auth/register",
+        json={"email": email, "password": password, "time_zone": "UTC"},
+        timeout=10,
+    )
+    assert response.status_code == 201, response.text
+
+
+@pytest.mark.e2e
+@needs_running_app
+def test_register_login_and_me_through_nginx() -> None:
+    email = f"image-{uuid.uuid4().hex[:8]}@example.com"
+    password = "correct horse battery staple"
+    _register(email, password)
+
+    login = httpx.post(
+        f"{BASE_URL}/api/auth/login", json={"email": email, "password": password}, timeout=10
+    )
+    assert login.status_code == 200, login.text
+    # The session cookie is Secure; send it explicitly since the test talks plain HTTP to localhost.
+    session_cookie = login.headers["set-cookie"].split(";", 1)[0]
+
+    me = httpx.get(f"{BASE_URL}/api/auth/me", headers={"Cookie": session_cookie}, timeout=10)
+    assert me.status_code == 200
+    assert me.json()["email"] == email
+
+
+@pytest.mark.e2e
+@needs_running_app
+def test_forged_rotating_forwarded_for_still_hits_429() -> None:
+    email = f"image-{uuid.uuid4().hex[:8]}@example.com"
+    _register(email, "correct horse battery staple")
+
+    def attempt(forged: str) -> int:
+        return httpx.post(
+            f"{BASE_URL}/api/auth/login",
+            json={"email": email, "password": "wrong password"},
+            headers={"X-Forwarded-For": forged},
+            timeout=10,
+        ).status_code
+
+    for i in range(5):
+        assert attempt(f"198.51.100.{i}") == 401
+    assert attempt("198.51.100.99") == 429

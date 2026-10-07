@@ -1,0 +1,58 @@
+name: deploy-ci
+
+# PR gates for the Cloud Run deploy (docs/superpowers/specs/2026-10-07-cloud-run-deploy-design.md):
+# build the single image, run it against Postgres and exercise it end to end.
+
+on:
+  pull_request:
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - "deploy/**"
+      - "docker-compose.app.yml"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "tests/test_app_image.py"
+      - ".github/workflows/deploy-ci.yml"
+
+concurrency:
+  group: deploy-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  UV_VERSION: "0.11.12"
+  APP_IMAGE_BASE_URL: "http://localhost:8080"
+  APP_IMAGE: "pomodoro-app:local"
+
+jobs:
+  app-image:
+    name: app-image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-backend
+        with:
+          uv-version: ${{ env.UV_VERSION }}
+
+      - name: Build and start the single image
+        run: docker compose -f docker-compose.app.yml up -d --build --wait --wait-timeout 300
+
+      - name: Single-image tests
+        run: uv run pytest tests/test_app_image.py -v
+
+      - name: Smoke script against the image
+        run: deploy/scripts/smoke.sh "$APP_IMAGE_BASE_URL"
+
+      - name: Logs
+        if: failure()
+        run: docker compose -f docker-compose.app.yml logs
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f docker-compose.app.yml down -v
