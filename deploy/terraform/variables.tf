@@ -30,4 +30,9 @@ variable "environments" {
     prod = { cpu = "1", memory = "1Gi" }
   }
   description = "Per-environment Cloud Run resources."
+
+  validation {
+    condition     = toset(keys(var.environments)) == toset(["qa", "prod"])
+    error_message = "environments must define exactly qa and prod."
+  }
 }

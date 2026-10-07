@@ -71,3 +71,26 @@ def test_qa_database_has_its_own_role_and_password() -> None:
     assert re.search(r'name\s+=\s+"pomodoro_qa"', neon)
     assert "neon_role.qa.password" in neon
     assert "sslmode=require" in neon
+
+
+@pytest.mark.unit
+def test_terraform_never_reverts_the_deployed_image() -> None:
+    """Terraform owns the shape, the pipeline owns the image (spec, "Principios")."""
+    main = (TERRAFORM_DIR / "modules" / "environment" / "main.tf").read_text()
+    assert main.count("ignore_changes") == 2
+    assert "template[0].containers[0].image" in main
+    assert "template[0].template[0].containers[0].image" in main
+
+
+@pytest.mark.unit
+def test_cloud_run_scales_between_zero_and_one() -> None:
+    main = (TERRAFORM_DIR / "modules" / "environment" / "main.tf").read_text()
+    assert "min_instance_count = 0" in main
+    assert "max_instance_count = 1" in main
+
+
+@pytest.mark.unit
+def test_runtime_identity_reads_only_its_own_secret() -> None:
+    main = (TERRAFORM_DIR / "modules" / "environment" / "main.tf").read_text()
+    assert "google_secret_manager_secret_iam_member" in main
+    assert "google_project_iam_member" not in main
