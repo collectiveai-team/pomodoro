@@ -138,3 +138,20 @@ def test_deploy_workflow_has_no_default_permissions_and_never_cancels_a_deploy()
     assert "\npermissions: {}\n" in deploy
     assert deploy.count("cancel-in-progress: false") == 2
     assert "cancel-in-progress: true" not in deploy
+
+
+@pytest.mark.unit
+def test_runbook_covers_every_operation_the_spec_lists() -> None:
+    runbook = (REPO_ROOT / "docs" / "deploy.md").read_text()
+    for heading in (
+        "## Bootstrap",
+        "## Primer apply",
+        "## Primer deploy",
+        "## Verificación del rate limit en QA",
+        "## Promoción a prod",
+        "## Rollback manual",
+        "## Reset de QA desde prod",
+        "## Rotación de secretos y tokens",
+        "## Subir max-instances",
+    ):
+        assert heading in runbook
