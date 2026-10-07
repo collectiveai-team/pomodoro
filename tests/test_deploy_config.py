@@ -62,3 +62,12 @@ def test_workload_identity_only_accepts_this_repository() -> None:
     shared = (TERRAFORM_DIR / "shared.tf").read_text()
     # CEL evaluated by Google, so the repository is interpolated into a quoted string literal.
     assert '"assertion.repository == \\"${var.github_repository}\\""' in shared
+
+
+@pytest.mark.unit
+def test_qa_database_has_its_own_role_and_password() -> None:
+    """QA must not reuse prod's inherited role: a leaked QA secret must not open prod."""
+    neon = (TERRAFORM_DIR / "neon.tf").read_text()
+    assert re.search(r'name\s+=\s+"pomodoro_qa"', neon)
+    assert "neon_role.qa.password" in neon
+    assert "sslmode=require" in neon
