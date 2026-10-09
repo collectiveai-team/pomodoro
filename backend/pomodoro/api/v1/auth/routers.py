@@ -11,18 +11,34 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Response
 
+from pomodoro.api.v1.auth.dependencies import get_current_session, get_current_user
+from pomodoro.api.v1.auth.schemas.requests.login import LoginRequest
 from pomodoro.api.v1.auth.schemas.requests.register import RegisterRequest
 from pomodoro.api.v1.auth.schemas.responses.session import UserResponse
-from pomodoro.api.v1.auth.use_cases import register_user
-from pomodoro.core.auth_sessions import SESSION_DURATION, AuthSessionRepository
+from pomodoro.api.v1.auth.use_cases import login_user, register_user
+from pomodoro.core.auth_sessions import (
+    SESSION_COOKIE_NAME,
+    SESSION_DURATION,
+    AuthSession,
+    AuthSessionRepository,
+)
 from pomodoro.core.clock import Clock, get_clock
-from pomodoro.core.users import UserRepository
+from pomodoro.core.users import User, UserRepository
 from pomodoro.database.repositories.auth_session import get_auth_session_repository
 from pomodoro.database.repositories.user import get_user_repository
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-SESSION_COOKIE_NAME = "session"
+
+def _user_response(user: User) -> UserResponse:
+    return UserResponse(
+        id=user.id,
+        email=user.email,
+        time_zone=user.time_zone,
+        alarm_enabled=user.alarm_enabled,
+        notifications_enabled=user.notifications_enabled,
+        created_at=user.created_at,
+    )
 
 
 def _set_session_cookie(response: Response, raw_token: str) -> None:
@@ -55,11 +71,41 @@ def register(
         auth_session_repository=auth_session_repository,
     )
     _set_session_cookie(response, registered.raw_token)
-    return UserResponse(
-        id=registered.user.id,
-        email=registered.user.email,
-        time_zone=registered.user.time_zone,
-        alarm_enabled=registered.user.alarm_enabled,
-        notifications_enabled=registered.user.notifications_enabled,
-        created_at=registered.user.created_at,
+    return _user_response(registered.user)
+
+
+@router.post("/login")
+def login(
+    payload: LoginRequest,
+    response: Response,
+    clock: Clock = Depends(get_clock),
+    user_repository: UserRepository = Depends(get_user_repository),
+    auth_session_repository: AuthSessionRepository = Depends(get_auth_session_repository),
+) -> UserResponse:
+    """Verify credentials and log the User in with a fresh session."""
+    authenticated = login_user(
+        email=payload.email,
+        password=payload.password,
+        clock=clock,
+        user_repository=user_repository,
+        auth_session_repository=auth_session_repository,
     )
+    _set_session_cookie(response, authenticated.raw_token)
+    return _user_response(authenticated.user)
+
+
+@router.get("/me")
+def me(user: User = Depends(get_current_user)) -> UserResponse:
+    """Return the caller's own public profile."""
+    return _user_response(user)
+
+
+@router.post("/logout", status_code=204)
+def logout(
+    response: Response,
+    auth_session: AuthSession = Depends(get_current_session),
+    auth_session_repository: AuthSessionRepository = Depends(get_auth_session_repository),
+) -> None:
+    """Revoke the caller's current session and clear its cookie."""
+    auth_session_repository.revoke(auth_session.id)
+    response.delete_cookie(key=SESSION_COOKIE_NAME, path="/")

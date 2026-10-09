@@ -20,7 +20,9 @@ if TYPE_CHECKING:
 
 AuthSessionId = NewType("AuthSessionId", UUID)
 
+SESSION_COOKIE_NAME = "session"
 SESSION_DURATION = timedelta(days=30)
+SESSION_RENEWAL_GRANULARITY = timedelta(hours=1)
 _TOKEN_BYTES = 32
 
 
@@ -60,9 +62,30 @@ def issue_session(
     )
 
 
+def needs_renewal(auth_session: AuthSession, now: datetime) -> bool:
+    """Whether this session's sliding expiry is due a renewal.
+
+    Renewing on every request would mean a DB write per request; `SESSION_RENEWAL_GRANULARITY`
+    batches renewals so a session only gets touched once per that window of use.
+    """
+    return now - auth_session.last_used_at >= SESSION_RENEWAL_GRANULARITY
+
+
 class AuthSessionRepository(Protocol):
     """Persistence Protocol for `AuthSession`, implemented by `database.repositories`."""
 
     def add(self, auth_session: AuthSession) -> None:
         """Persist a newly issued session."""
+        ...
+
+    def get_by_token_hash(self, token_hash: str) -> AuthSession | None:
+        """Return the session whose `token_hash` matches, or None."""
+        ...
+
+    def touch(self, session_id: AuthSessionId, now: datetime) -> None:
+        """Renew a session's sliding expiry: `last_used_at` and `expires_at` from `now`."""
+        ...
+
+    def revoke(self, session_id: AuthSessionId) -> None:
+        """Revoke a session; its cookie must stop authenticating immediately after this."""
         ...

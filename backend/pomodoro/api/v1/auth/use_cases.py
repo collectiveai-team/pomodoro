@@ -1,4 +1,4 @@
-"""Register-with-auto-login use case: the orchestration `routers.py` delegates to."""
+"""Register and login use cases: the orchestration `routers.py` delegates to."""
 
 from __future__ import annotations
 
@@ -15,9 +15,10 @@ from pomodoro.core.auth_sessions import (
     issue_session,
 )
 from pomodoro.core.logger import get_logger
-from pomodoro.core.passwords import hash_password
+from pomodoro.core.passwords import hash_password, verify_password
 from pomodoro.core.users import (
     DuplicateEmailError,
+    InvalidCredentialsError,
     User,
     UserId,
     UserRepository,
@@ -31,10 +32,12 @@ if TYPE_CHECKING:
 
 log = get_logger(__name__)
 
+_INVALID_CREDENTIALS_MESSAGE = "Email o contraseña incorrectos."
+
 
 @dataclass(frozen=True, slots=True)
-class RegisteredSession:
-    """What a successful registration produces.
+class AuthenticatedSession:
+    """What a successful register or login produces.
 
     The raw token exists only here, long enough for the router to set it as a cookie — it is
     never stored (only `session.token_hash` is).
@@ -53,7 +56,7 @@ def register_user(
     clock: Clock,
     user_repository: UserRepository,
     auth_session_repository: AuthSessionRepository,
-) -> RegisteredSession:
+) -> AuthenticatedSession:
     """Validate, create the User, and auto-log them in with a fresh session."""
     validate_email_format(email)
     email_key = normalize_email(email)
@@ -83,4 +86,34 @@ def register_user(
     auth_session_repository.add(session)
 
     log.info("user_registered", user_id=str(user.id))
-    return RegisteredSession(user=user, session=session, raw_token=raw_token)
+    return AuthenticatedSession(user=user, session=session, raw_token=raw_token)
+
+
+def login_user(
+    *,
+    email: str,
+    password: str,
+    clock: Clock,
+    user_repository: UserRepository,
+    auth_session_repository: AuthSessionRepository,
+) -> AuthenticatedSession:
+    """Verify credentials and issue a fresh session, or raise `InvalidCredentialsError`.
+
+    The error never distinguishes an unknown email from a wrong password (User Story 6).
+    """
+    credentials = user_repository.get_credentials_by_email_key(normalize_email(email))
+    if credentials is None or not verify_password(password, credentials.password_hash):
+        raise InvalidCredentialsError(_INVALID_CREDENTIALS_MESSAGE)
+
+    now = clock.now()
+    raw_token = generate_session_token()
+    session = issue_session(
+        session_id=AuthSessionId(uuid4()),
+        user_id=credentials.user.id,
+        token_hash=hash_session_token(raw_token),
+        now=now,
+    )
+    auth_session_repository.add(session)
+
+    log.info("user_logged_in", user_id=str(credentials.user.id))
+    return AuthenticatedSession(user=credentials.user, session=session, raw_token=raw_token)

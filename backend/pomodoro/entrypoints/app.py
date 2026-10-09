@@ -11,7 +11,12 @@ from pomodoro.api.v1.auth.routers import router as auth_router
 from pomodoro.api.v1.routers.health import router as health_router
 from pomodoro.api.v1.schemas.responses.error import ErrorResponse
 from pomodoro.core.logger import get_logger
-from pomodoro.core.users import DuplicateEmailError, InvalidEmailError, InvalidPasswordLengthError
+from pomodoro.core.users import (
+    DuplicateEmailError,
+    InvalidCredentialsError,
+    InvalidEmailError,
+    InvalidPasswordLengthError,
+)
 from pomodoro.settings import get_settings
 
 log = get_logger(__name__)
@@ -51,6 +56,13 @@ def _register_exception_handlers(app: FastAPI) -> None:
     ) -> JSONResponse:
         log.info("invalid_password_length", path=request.url.path)
         return _error_response(422, str(exc), "invalid_password_length")
+
+    @app.exception_handler(InvalidCredentialsError)
+    async def _handle_invalid_credentials(
+        request: Request, exc: InvalidCredentialsError
+    ) -> JSONResponse:
+        log.info("invalid_credentials", path=request.url.path)
+        return _error_response(401, str(exc), "invalid_credentials")
 
     @app.exception_handler(Exception)
     async def _handle_unexpected_error(request: Request, exc: Exception) -> JSONResponse:

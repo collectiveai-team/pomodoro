@@ -2,10 +2,18 @@
 
 from __future__ import annotations
 
-from fastapi import Depends
-from sqlmodel import Session
+from datetime import datetime
 
-from pomodoro.core.auth_sessions import AuthSession, AuthSessionRepository
+from fastapi import Depends
+from sqlmodel import Session, select
+
+from pomodoro.core.auth_sessions import (
+    SESSION_DURATION,
+    AuthSession,
+    AuthSessionId,
+    AuthSessionRepository,
+)
+from pomodoro.core.users import UserId
 from pomodoro.database.models.auth_session import AuthSessionTable
 from pomodoro.database.session import get_db_session
 
@@ -29,6 +37,41 @@ class SqlAuthSessionRepository:
             )
         )
         self._session.commit()
+
+    def get_by_token_hash(self, token_hash: str) -> AuthSession | None:
+        """Return the session whose `token_hash` matches, or None."""
+        row = self._session.exec(
+            select(AuthSessionTable).where(AuthSessionTable.token_hash == token_hash)
+        ).first()
+        return None if row is None else _to_entity(row)
+
+    def touch(self, session_id: AuthSessionId, now: datetime) -> None:
+        """Renew a session's sliding expiry: `last_used_at` and `expires_at` from `now`."""
+        row = self._session.get(AuthSessionTable, session_id)
+        if row is None:
+            return
+        row.last_used_at = now
+        row.expires_at = now + SESSION_DURATION
+        self._session.add(row)
+        self._session.commit()
+
+    def revoke(self, session_id: AuthSessionId) -> None:
+        """Delete the session row; its cookie stops authenticating immediately."""
+        row = self._session.get(AuthSessionTable, session_id)
+        if row is not None:
+            self._session.delete(row)
+            self._session.commit()
+
+
+def _to_entity(row: AuthSessionTable) -> AuthSession:
+    return AuthSession(
+        id=AuthSessionId(row.id),
+        user_id=UserId(row.user_id),
+        token_hash=row.token_hash,
+        created_at=row.created_at,
+        last_used_at=row.last_used_at,
+        expires_at=row.expires_at,
+    )
 
 
 def get_auth_session_repository(

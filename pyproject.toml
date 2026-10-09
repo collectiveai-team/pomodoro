@@ -105,6 +105,7 @@ ban-relative-imports = "all"
 # (see api/v1/routers/health.py, which dodges this only because `Clock`/`DbSession` happen to
 # share an import line with their runtime-used provider function).
 "backend/pomodoro/api/**/routers.py" = ["TC001", "TC002", "TC003"]
+"backend/pomodoro/api/**/dependencies.py" = ["TC001", "TC002", "TC003"]
 "backend/pomodoro/database/repositories/**" = ["TC001", "TC002", "TC003"]
 
 # FastAPI's dependency-injection idiom is `param: T = Depends(...)` — calling Depends() in an

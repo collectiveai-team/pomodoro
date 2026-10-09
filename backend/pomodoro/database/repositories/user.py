@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import Depends
 from sqlmodel import Session, select
 
-from pomodoro.core.users import User, UserId, UserRepository
+from pomodoro.core.users import User, UserCredentials, UserId, UserRepository
 from pomodoro.database.models.user import UserTable
 from pomodoro.database.session import get_db_session
 
@@ -36,6 +36,18 @@ class SqlUserRepository:
         """Return the User whose `email_key` matches, or None."""
         row = self._session.exec(select(UserTable).where(UserTable.email_key == email_key)).first()
         return None if row is None else _to_entity(row)
+
+    def get_by_id(self, user_id: UserId) -> User | None:
+        """Return the User with this id, or None."""
+        row = self._session.get(UserTable, user_id)
+        return None if row is None else _to_entity(row)
+
+    def get_credentials_by_email_key(self, email_key: str) -> UserCredentials | None:
+        """Return the User and stored password hash whose `email_key` matches, or None."""
+        row = self._session.exec(select(UserTable).where(UserTable.email_key == email_key)).first()
+        if row is None:
+            return None
+        return UserCredentials(user=_to_entity(row), password_hash=row.password_hash)
 
 
 def _to_entity(row: UserTable) -> User:

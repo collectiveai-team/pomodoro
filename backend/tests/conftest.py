@@ -61,5 +61,7 @@ def client(fake_clock: FakeClock) -> Iterator[TestClient]:
     app.dependency_overrides[get_db_session] = _get_test_db_session
     app.dependency_overrides[get_clock] = lambda: fake_clock
 
-    with TestClient(app) as test_client:
+    # `base_url="https://..."` so the client's cookie jar honors the session cookie's `Secure`
+    # attribute and resends it on later requests, exactly as a real browser would over TLS.
+    with TestClient(app, base_url="https://testserver") as test_client:
         yield test_client

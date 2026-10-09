@@ -34,6 +34,10 @@ class InvalidPasswordLengthError(ValueError):
     """Raised when a password is shorter than 8 or longer than 128 characters."""
 
 
+class InvalidCredentialsError(ValueError):
+    """Raised on any login mismatch; the message never reveals which field was wrong."""
+
+
 @dataclass(frozen=True, slots=True)
 class User:
     """A registered User: identity, normalized email key, time zone, and preferences."""
@@ -45,6 +49,14 @@ class User:
     alarm_enabled: bool
     notifications_enabled: bool
     created_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class UserCredentials:
+    """A User alongside its stored Argon2 hash, for login's password check only."""
+
+    user: User
+    password_hash: str
 
 
 def normalize_email(email: str) -> str:
@@ -77,4 +89,12 @@ class UserRepository(Protocol):
 
     def get_by_email_key(self, email_key: str) -> User | None:
         """Return the User whose normalized email key matches `email_key`, or None."""
+        ...
+
+    def get_by_id(self, user_id: UserId) -> User | None:
+        """Return the User with this id, or None."""
+        ...
+
+    def get_credentials_by_email_key(self, email_key: str) -> UserCredentials | None:
+        """Return the User and stored password hash whose email key matches, or None."""
         ...
