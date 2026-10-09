@@ -6,6 +6,7 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
+from pomodoro.api.v1.tags.use_cases import resolve_tag_ids_by_names
 from pomodoro.core.logger import get_logger
 from pomodoro.core.tasks import (
     Task,
@@ -25,6 +26,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from pomodoro.core.clock import Clock
+    from pomodoro.core.tags import TagRepository
     from pomodoro.core.users import UserId
 
 log = get_logger(__name__)
@@ -157,6 +159,29 @@ def delete_task(*, user_id: UserId, task_id: TaskId, task_repository: TaskReposi
     task_repository.delete(user_id, task_id)
 
     log.info("task_deleted", task_id=str(task_id))
+
+
+def set_task_tags(
+    *,
+    user_id: UserId,
+    task_id: TaskId,
+    names: Sequence[str],
+    task_repository: TaskRepository,
+    tag_repository: TagRepository,
+) -> Task:
+    """Set a Task's Tags from a name list, creating or reusing each by normalized key.
+
+    Raises `TaskNotFoundError` when the Task does not exist or belongs to another User.
+    """
+    task = task_repository.get_by_id(user_id, task_id)
+    if task is None:
+        raise TaskNotFoundError(f"Task {task_id} not found.")
+
+    tag_ids = resolve_tag_ids_by_names(user_id=user_id, names=names, tag_repository=tag_repository)
+    task_repository.set_tags(user_id, task_id, tag_ids)
+
+    log.info("task_tags_set", task_id=str(task_id))
+    return replace(task, tag_ids=tuple(tag_ids))
 
 
 def list_active_tasks(*, user_id: UserId, task_repository: TaskRepository) -> TaskListing:

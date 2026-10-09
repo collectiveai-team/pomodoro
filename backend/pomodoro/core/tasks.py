@@ -2,8 +2,8 @@
 
 A Task's uniqueness key (`text_key`) is a persistence-only derived column, like `User.email_key`:
 `core` computes it via `normalize_task_text`, but it never appears on this entity (ADR-0001:
-core holds domain rules, not storage-shaped columns). Tags are not implemented yet (T8); `tag_ids`
-exists on the entity per the spec's shape and is always empty until Tags land.
+core holds domain rules, not storage-shaped columns). `tag_ids` holds the ids of the `core.tags`
+Tags assigned to this Task (T8); a Task only ever stores a Tag's id, never a copy of its name.
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
     from datetime import datetime
 
+    from pomodoro.core.tags import TagId
     from pomodoro.core.users import UserId
 
 TaskId = NewType("TaskId", UUID)
@@ -55,7 +56,7 @@ class Task:
     user_id: UserId
     text: str
     position: int
-    tag_ids: tuple[UUID, ...]
+    tag_ids: tuple[TagId, ...]
     created_at: datetime
     archived_at: datetime | None
 
@@ -159,6 +160,10 @@ class TaskRepository(Protocol):
 
     def delete(self, user_id: UserId, task_id: TaskId) -> None:
         """Permanently remove the caller's Task."""
+        ...
+
+    def set_tags(self, user_id: UserId, task_id: TaskId, tag_ids: Sequence[TagId]) -> None:
+        """Replace the caller's Task's Tag assignments with exactly `tag_ids`."""
         ...
 
     def task_ids_with_pomodoros(self, user_id: UserId) -> frozenset[TaskId]:

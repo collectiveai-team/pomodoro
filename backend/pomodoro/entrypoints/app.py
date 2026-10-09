@@ -13,8 +13,10 @@ from pomodoro.api.v1.auth.rate_limit import InMemoryRateLimiter, RateLimitExceed
 from pomodoro.api.v1.auth.routers import router as auth_router
 from pomodoro.api.v1.routers.health import router as health_router
 from pomodoro.api.v1.schemas.responses.error import ErrorResponse
+from pomodoro.api.v1.tags.routers import router as tags_router
 from pomodoro.api.v1.tasks.routers import router as tasks_router
 from pomodoro.core.logger import get_logger
+from pomodoro.core.tags import DuplicateTagNameError, EmptyTagNameError, TagNotFoundError
 from pomodoro.core.tasks import (
     DuplicateTaskTextError,
     EmptyTaskTextError,
@@ -58,6 +60,9 @@ _DOMAIN_ERROR_HANDLERS: list[tuple[type[Exception], int, str]] = [
     (TaskNotFoundError, 404, "task_not_found"),
     (TaskReorderMismatchError, 422, "task_reorder_mismatch"),
     (TaskHasRecordedPomodorosError, 409, "task_has_recorded_pomodoros"),
+    (EmptyTagNameError, 422, "empty_tag_name"),
+    (DuplicateTagNameError, 422, "duplicate_tag_name"),
+    (TagNotFoundError, 404, "tag_not_found"),
 ]
 
 
@@ -103,6 +108,7 @@ def create_app() -> FastAPI:
     app.include_router(health_router, prefix="/api")
     app.include_router(auth_router, prefix="/api/v1")
     app.include_router(tasks_router, prefix="/api/v1")
+    app.include_router(tags_router, prefix="/api/v1")
 
     return app
 

@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends
 from pomodoro.api.v1.auth.dependencies import get_current_user
 from pomodoro.api.v1.tasks.schemas.requests.create_task import CreateTaskRequest
 from pomodoro.api.v1.tasks.schemas.requests.reorder_tasks import ReorderTasksRequest
+from pomodoro.api.v1.tasks.schemas.requests.set_task_tags import SetTaskTagsRequest
 from pomodoro.api.v1.tasks.schemas.requests.update_task import UpdateTaskRequest
 from pomodoro.api.v1.tasks.schemas.responses.task import TaskResponse
 from pomodoro.api.v1.tasks.schemas.responses.task_list import TaskListResponse
@@ -25,11 +26,14 @@ from pomodoro.api.v1.tasks.use_cases import (
     list_active_tasks,
     list_archived_tasks,
     reorder_tasks,
+    set_task_tags,
     unarchive_task,
 )
 from pomodoro.core.clock import Clock, get_clock
+from pomodoro.core.tags import TagRepository
 from pomodoro.core.tasks import Task, TaskId, TaskRepository
 from pomodoro.core.users import User
+from pomodoro.database.repositories.tag import get_tag_repository
 from pomodoro.database.repositories.task import get_task_repository
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
@@ -85,6 +89,26 @@ def update(
         task_id=TaskId(task_id),
         text=payload.text,
         task_repository=task_repository,
+    )
+    deletable = task.id not in task_repository.task_ids_with_pomodoros(user.id)
+    return _task_response(task, deletable=deletable)
+
+
+@router.patch("/{task_id}/tags")
+def update_tags(
+    task_id: UUID,
+    payload: SetTaskTagsRequest,
+    user: User = Depends(get_current_user),
+    task_repository: TaskRepository = Depends(get_task_repository),
+    tag_repository: TagRepository = Depends(get_tag_repository),
+) -> TaskResponse:
+    """Set the Task's Tags from a name list, creating or reusing each by normalized key."""
+    task = set_task_tags(
+        user_id=user.id,
+        task_id=TaskId(task_id),
+        names=payload.names,
+        task_repository=task_repository,
+        tag_repository=tag_repository,
     )
     deletable = task.id not in task_repository.task_ids_with_pomodoros(user.id)
     return _task_response(task, deletable=deletable)

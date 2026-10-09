@@ -7,15 +7,18 @@ from typing import TYPE_CHECKING
 from fastapi import Depends
 from sqlmodel import Session, select
 
+from pomodoro.core.tags import TagId
 from pomodoro.core.tasks import Task, TaskId, TaskRepository
 from pomodoro.core.users import UserId
 from pomodoro.database.models.pomodoro import PomodoroTable
 from pomodoro.database.models.task import TaskTable
+from pomodoro.database.models.task_tag import TaskTagTable
 from pomodoro.database.session import get_db_session
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
     from datetime import datetime
+    from uuid import UUID
 
 
 class SqlTaskRepository:
@@ -44,7 +47,7 @@ class SqlTaskRepository:
         row = self._session.get(TaskTable, task_id)
         if row is None or row.user_id != user_id:
             return None
-        return _to_entity(row)
+        return _to_entity(row, self._tag_ids_for_task(row.id))
 
     def list_active(self, user_id: UserId) -> list[Task]:
         """Return the caller's Active Tasks ordered by `(position, id)`."""
@@ -56,7 +59,8 @@ class SqlTaskRepository:
             )
             .order_by(TaskTable.position, TaskTable.id)  # pyrefly: ignore[bad-argument-type]
         ).all()
-        return [_to_entity(row) for row in rows]
+        tag_ids_by_task = self._tag_ids_by_task([row.id for row in rows])
+        return [_to_entity(row, tag_ids_by_task.get(row.id, ())) for row in rows]
 
     def update_text(self, user_id: UserId, task_id: TaskId, text: str, text_key: str) -> None:
         """Overwrite a Task's text and derived key."""
@@ -78,7 +82,8 @@ class SqlTaskRepository:
             )
             .order_by(TaskTable.archived_at.desc())  # pyrefly: ignore[missing-attribute]
         ).all()
-        return [_to_entity(row) for row in rows]
+        tag_ids_by_task = self._tag_ids_by_task([row.id for row in rows])
+        return [_to_entity(row, tag_ids_by_task.get(row.id, ())) for row in rows]
 
     def count_active(self, user_id: UserId) -> int:
         """Return the number of the caller's Active Tasks."""
@@ -147,6 +152,19 @@ class SqlTaskRepository:
         self._session.delete(row)
         self._session.commit()
 
+    def set_tags(self, user_id: UserId, task_id: TaskId, tag_ids: Sequence[TagId]) -> None:
+        """Replace the caller's Task's Tag assignments with exactly `tag_ids`."""
+        row = self._session.get(TaskTable, task_id)
+        if row is None or row.user_id != user_id:
+            return
+        for existing_row in self._session.exec(
+            select(TaskTagTable).where(TaskTagTable.task_id == task_id)
+        ).all():
+            self._session.delete(existing_row)
+        for tag_id in dict.fromkeys(tag_ids):
+            self._session.add(TaskTagTable(task_id=task_id, tag_id=tag_id))
+        self._session.commit()
+
     def task_ids_with_pomodoros(self, user_id: UserId) -> frozenset[TaskId]:
         """Return the ids of the caller's Tasks that have at least one Pomodoro recorded."""
         rows = self._session.exec(
@@ -154,14 +172,34 @@ class SqlTaskRepository:
         ).all()
         return frozenset(TaskId(task_id) for task_id in rows)
 
+    def _tag_ids_for_task(self, task_id: UUID) -> tuple[TagId, ...]:
+        rows = self._session.exec(
+            select(TaskTagTable.tag_id)
+            .where(TaskTagTable.task_id == task_id)
+            .order_by(TaskTagTable.tag_id)  # pyrefly: ignore[bad-argument-type]
+        ).all()
+        return tuple(TagId(tag_id) for tag_id in rows)
 
-def _to_entity(row: TaskTable) -> Task:
+    def _tag_ids_by_task(self, task_ids: Sequence[UUID]) -> Mapping[UUID, tuple[TagId, ...]]:
+        grouped: dict[UUID, list[TagId]] = {}
+        if task_ids:
+            rows = self._session.exec(
+                select(TaskTagTable.task_id, TaskTagTable.tag_id)
+                .where(TaskTagTable.task_id.in_(task_ids))  # pyrefly: ignore[missing-attribute]
+                .order_by(TaskTagTable.tag_id)  # pyrefly: ignore[bad-argument-type]
+            ).all()
+            for task_id, tag_id in rows:
+                grouped.setdefault(task_id, []).append(TagId(tag_id))
+        return {task_id: tuple(tag_ids) for task_id, tag_ids in grouped.items()}
+
+
+def _to_entity(row: TaskTable, tag_ids: tuple[TagId, ...] = ()) -> Task:
     return Task(
         id=TaskId(row.id),
         user_id=UserId(row.user_id),
         text=row.text,
         position=row.position,
-        tag_ids=(),
+        tag_ids=tag_ids,
         created_at=row.created_at,
         archived_at=row.archived_at,
     )
