@@ -23,6 +23,7 @@ from pomodoro.api.v1.schemas.requests.tasks import (
 )
 from pomodoro.api.v1.schemas.responses.tasks import TaskListResponse, TaskResponse
 from pomodoro.api.v1.session import require_json_content_type
+from pomodoro.core import timer as core_timer
 from pomodoro.core.entities import TagId, TaskId
 from pomodoro.core.filtering import NO_TAG, filter_tasks
 from pomodoro.core.tasks import (
@@ -30,15 +31,17 @@ from pomodoro.core.tasks import (
     create_task,
     edit_task_text,
     ensure_task_deletable,
+    ensure_task_not_in_progress,
     order_active_tasks,
     order_archived_tasks,
     reorder_active_tasks_for_user,
     unarchive_task,
 )
 from pomodoro.database.task_repository import SqlTaskRepository
+from pomodoro.database.timer_repository import SqlTimerRepository
 
 if TYPE_CHECKING:
-    from pomodoro.core.entities import AuthSession, Task
+    from pomodoro.core.entities import AuthSession, Task, Timer, UserId
 
 router = APIRouter(
     prefix="/tasks", tags=["tasks"], dependencies=[Depends(require_json_content_type)]
@@ -65,6 +68,18 @@ def _to_response(task: Task, *, deletable: bool) -> TaskResponse:
 
 def _not_found() -> HTTPException:
     return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found.")
+
+
+def _settled_timer(db_session: Session, user_id: UserId) -> Timer:
+    """Return `user_id`'s current Timer, settled against `now` (T14).
+
+    Reuses the same concurrency-safe settle-then-write path as `api/v1/timer`
+    (T13) so the archive/delete guard below never consults a stale cached
+    phase, even when an expired Pomodoro/Break hasn't been touched since.
+    """
+    now = datetime.now(UTC)
+    update = SqlTimerRepository(db_session).apply(user_id, lambda t: core_timer.settle(t, now))
+    return update.timer
 
 
 @router.get("")
@@ -152,6 +167,7 @@ def delete(
     task = repo.get(auth_session.user_id, TaskId(task_id))
     if task is None:
         raise _not_found()
+    ensure_task_not_in_progress(task, timer=_settled_timer(db_session, auth_session.user_id))
     has_pomodoro = repo.has_pomodoro(auth_session.user_id, TaskId(task_id))
     ensure_task_deletable(task, has_pomodoros=has_pomodoro)
     repo.delete(auth_session.user_id, TaskId(task_id))
@@ -188,6 +204,7 @@ def archive(
     task = repo.get(auth_session.user_id, TaskId(task_id))
     if task is None:
         raise _not_found()
+    ensure_task_not_in_progress(task, timer=_settled_timer(db_session, auth_session.user_id))
     now = datetime.now(UTC)
     archive_task(task, archived_at=now)
     updated = repo.archive(auth_session.user_id, TaskId(task_id), archived_at=now)

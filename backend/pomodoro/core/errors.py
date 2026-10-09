@@ -139,3 +139,13 @@ class TaskNotActiveError(DomainError):
     def __init__(self, task_id: TaskId) -> None:
         super().__init__(f"Task {task_id} is not one of the User's Active Tasks.")
         self.task_id = task_id
+
+
+class TaskInProgressError(DomainError):
+    """Raised when archiving or deleting the Task currently in progress on the Timer (T14)."""
+
+    def __init__(self, task_id: TaskId) -> None:
+        super().__init__(
+            f"Task {task_id} cannot be archived or deleted while it is in progress on the Timer."
+        )
+        self.task_id = task_id

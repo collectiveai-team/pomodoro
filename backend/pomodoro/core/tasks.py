@@ -16,6 +16,7 @@ from pomodoro.core.entities import Task
 from pomodoro.core.errors import (
     DuplicateTaskTextError,
     TaskHasPomodorosError,
+    TaskInProgressError,
     TaskReorderInvalidError,
     TaskTextEmptyError,
     TaskTextTooLongError,
@@ -26,7 +27,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from datetime import datetime
 
-    from pomodoro.core.entities import TaskId, UserId
+    from pomodoro.core.entities import TaskId, Timer, UserId
 
 MAX_TASK_TEXT_LENGTH = 200
 
@@ -142,6 +143,19 @@ def ensure_task_deletable(task: Task, *, has_pomodoros: bool) -> None:
     """Raise if `task` has any Pomodoro — permanent delete is only for untouched Tasks."""
     if has_pomodoros:
         raise TaskHasPomodorosError(task.id)
+
+
+def ensure_task_not_in_progress(task: Task, *, timer: Timer) -> None:
+    """Raise if `task` is the one currently in progress on the User's Timer (T14, spec story 31).
+
+    `timer.task_id` is only ever set while the Timer is dedicated to a Task
+    (PomodoroRunning/Paused, AskingToLog, ReadyForNext) — it is cleared on every
+    path back to Idle and during a Break, so a plain identity check is exact:
+    no phase-by-phase special-casing is needed, and the guard releases the
+    moment the Timer itself releases the Task.
+    """
+    if timer.task_id == task.id:
+        raise TaskInProgressError(task.id)
 
 
 def order_active_tasks(tasks: Sequence[Task]) -> list[Task]:
