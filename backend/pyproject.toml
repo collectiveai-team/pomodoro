@@ -31,6 +31,15 @@ extend = "../pyproject.toml"
 # not a lazily-evaluated dataclass), so `datetime` must stay a real top-level import here,
 # never moved behind `TYPE_CHECKING` the way flake8-type-checking otherwise prefers.
 "pomodoro/database/tables.py" = ["TC003"]
+# Same reasoning as tables.py above, for pydantic `BaseModel`s under api/**/schemas/ (T9):
+# a field's type (e.g. `datetime`) is resolved at class-definition time, not lazily.
+"pomodoro/api/**/schemas/**" = ["TC001", "TC002", "TC003"]
+# A router's parameters (a request-body schema, or a `Session`/`RateLimiter` resolved via
+# `Depends(...)`) are resolved by FastAPI at request-handling time via
+# `typing.get_type_hints()`, which needs the name in the module's real (not
+# `TYPE_CHECKING`-only) namespace — ruff's flake8-type-checking can't see that a plain
+# annotation is actually evaluated at runtime here (T9).
+"pomodoro/api/**/routers/**" = ["TC001", "TC002"]
 
 # MARK: Pyrefly
 [tool.pyrefly]

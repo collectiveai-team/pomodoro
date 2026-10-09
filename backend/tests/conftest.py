@@ -22,6 +22,13 @@ def _in_memory_database(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setenv("DATABASE_URL", "sqlite://")
     get_settings.cache_clear()
     dependencies.get_engine.cache_clear()
+    # `get_rate_limiter` is process-wide (`@lru_cache`), and `TestClient` requests all share
+    # the same `request.client.host` ("testclient") - without a per-test reset, failed-login
+    # attempts recorded by one test's rate-limiting assertions would leak into the next test
+    # using the same email (T9's `api/v1/auth` is the first ticket to exercise it through a
+    # real request rather than a directly-constructed `RateLimiter()`).
+    dependencies.get_rate_limiter.cache_clear()
     yield
     get_settings.cache_clear()
     dependencies.get_engine.cache_clear()
+    dependencies.get_rate_limiter.cache_clear()

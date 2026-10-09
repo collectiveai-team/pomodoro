@@ -107,6 +107,14 @@ class PasswordLengthError(DomainError):
         self.max_length = max_length
 
 
+class InvalidTimeZoneError(DomainError):
+    """Raised when a time zone isn't a valid IANA zone name (register T9, Settings T15)."""
+
+    def __init__(self, time_zone: str) -> None:
+        super().__init__(f"{time_zone!r} is not a valid time zone.")
+        self.time_zone = time_zone
+
+
 class TimerActionNotAllowedError(DomainError):
     """Raised when a Timer action doesn't match its current phase; `api` maps this to 409."""
 

@@ -48,6 +48,11 @@ def get_rate_limiter() -> RateLimiter:
     return RateLimiter()
 
 
+def get_trust_forwarded_for() -> bool:
+    """Expose `Settings.trust_forwarded_for` to `api` routers without an upward import (T9)."""
+    return get_settings().trust_forwarded_for
+
+
 def require_session(
     request: Request,
     response: Response,

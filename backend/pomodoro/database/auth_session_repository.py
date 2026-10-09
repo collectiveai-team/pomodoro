@@ -91,3 +91,16 @@ class SqlAuthSessionRepository:
         for row in rows:
             self._session.delete(row)
         self._session.commit()
+
+    def delete_all_for_user_except(
+        self, user_id: UserId, *, keep_session_id: AuthSessionId
+    ) -> None:
+        rows = self._session.exec(
+            select(tables.AuthSession).where(
+                tables.AuthSession.user_id == user_id,
+                tables.AuthSession.id != keep_session_id,
+            )
+        ).all()
+        for row in rows:
+            self._session.delete(row)
+        self._session.commit()

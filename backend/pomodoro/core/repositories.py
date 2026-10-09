@@ -78,3 +78,9 @@ class AuthSessionRepository(Protocol):
     def delete_all_for_user(self, user_id: UserId) -> None:
         """Revoke every AuthSession belonging to `user_id`."""
         ...
+
+    def delete_all_for_user_except(
+        self, user_id: UserId, *, keep_session_id: AuthSessionId
+    ) -> None:
+        """Revoke every AuthSession belonging to `user_id` except `keep_session_id`."""
+        ...
