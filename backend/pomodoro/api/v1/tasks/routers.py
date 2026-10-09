@@ -6,9 +6,10 @@ real, module-level import, never `TYPE_CHECKING`-only.
 
 from __future__ import annotations
 
+from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from pomodoro.api.v1.auth.dependencies import get_current_user
 from pomodoro.api.v1.tasks.schemas.requests.create_task import CreateTaskRequest
@@ -30,7 +31,8 @@ from pomodoro.api.v1.tasks.use_cases import (
     unarchive_task,
 )
 from pomodoro.core.clock import Clock, get_clock
-from pomodoro.core.tags import TagRepository
+from pomodoro.core.tags import TagId, TagRepository
+from pomodoro.core.task_filtering import TaskTagFilter, filter_tasks
 from pomodoro.core.tasks import Task, TaskId, TaskRepository
 from pomodoro.core.users import User
 from pomodoro.database.repositories.tag import get_tag_repository
@@ -51,15 +53,23 @@ def _task_response(task: Task, *, deletable: bool) -> TaskResponse:
     )
 
 
-def _task_listing_response(listing: TaskListing) -> TaskListResponse:
+def _task_listing_response(
+    listing: TaskListing, tasks: list[Task] | None = None
+) -> TaskListResponse:
     return TaskListResponse(
         tasks=[
             _task_response(task, deletable=task.id not in listing.task_ids_with_pomodoros)
-            for task in listing.tasks
+            for task in (tasks if tasks is not None else listing.tasks)
         ],
         active_count=listing.active_count,
         archived_count=listing.archived_count,
     )
+
+
+def _selected_tag_filters(
+    tags: list[UUID | Literal["sin etiqueta"]] | None,
+) -> tuple[TaskTagFilter, ...]:
+    return tuple(TagId(tag) if isinstance(tag, UUID) else tag for tag in tags or ())
 
 
 @router.post("", status_code=201)
@@ -116,22 +126,28 @@ def update_tags(
 
 @router.get("")
 def list_active(
+    q: str | None = None,
+    tags: list[UUID | Literal["sin etiqueta"]] | None = Query(default=None),
     user: User = Depends(get_current_user),
     task_repository: TaskRepository = Depends(get_task_repository),
 ) -> TaskListResponse:
     """List the caller's Active Tasks ordered by `(position, id)`, with both tab-badge counts."""
     listing = list_active_tasks(user_id=user.id, task_repository=task_repository)
-    return _task_listing_response(listing)
+    filtered_tasks = filter_tasks(listing.tasks, q, _selected_tag_filters(tags))
+    return _task_listing_response(listing, filtered_tasks)
 
 
 @router.get("/archived")
 def list_archived(
+    q: str | None = None,
+    tags: list[UUID | Literal["sin etiqueta"]] | None = Query(default=None),
     user: User = Depends(get_current_user),
     task_repository: TaskRepository = Depends(get_task_repository),
 ) -> TaskListResponse:
     """List the caller's Archived Tasks ordered by `archived_at` descending, with both counts."""
     listing = list_archived_tasks(user_id=user.id, task_repository=task_repository)
-    return _task_listing_response(listing)
+    filtered_tasks = filter_tasks(listing.tasks, q, _selected_tag_filters(tags))
+    return _task_listing_response(listing, filtered_tasks)
 
 
 @router.post("/{task_id}/archive")
