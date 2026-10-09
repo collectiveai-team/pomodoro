@@ -12,6 +12,38 @@ Router, TypeScript, pnpm, Tailwind, Biome). Tooling, gates, and a root `pomodoro
 package placeholder exist; the domain model does not yet. Sections marked **OPEN** below
 await the product objective. Do not invent them; ask.
 
+## Engineering standards (botica) — read before writing code
+
+House standards come from botica (`collectiveai-team/botica`) and are installed in this repo.
+Prefer them over training-default patterns:
+
+- **Index:** `AGENTS.md` → "Engineering Standards" lists every CES rule with its slug. Before
+  writing code a rule touches, open its detail file in `.agents/rules/<slug>.md` and copy the
+  matching drop-in from `.agents/snippets/` (`api-schemas.py`, `settings.py`,
+  `core/logger.py`, `no-dict-boundary.py`, `tests/in_memory_repository.py`).
+- **Stack rules:** load the `engineering-rules` skill and read `rules/_sections.md`, then only
+  the rules the work touches. For this repo that is at least section 8 FastAPI
+  (`api-structure`, `api-pydantic-settings`, `api-sqlmodel-alembic`, `api-schemas`,
+  `api-auth`), section 12 Next.js (`fe-*`), and the testing and architecture sections.
+- **Workflow skills:** `tdd` for every behaviour change, `codebase-design` /
+  `domain-modeling` when shaping modules or the domain, `test-smell-review` after writing
+  tests, `engineering-pr-review` before opening or updating a PR.
+- **Precedence:** issue #12's spec and the ADRs in `docs/adr/` win over a generic house rule
+  when they conflict (e.g. migrations run as a separate step, never at app startup, even though
+  `api-sqlmodel-alembic` says otherwise). Record any such deviation in the ticket or PR.
+
+API boundary checklist (CES-4, CES-17, CES-76, CES-79):
+
+- Versioned inbound package: `api/<v>/routers/` and `api/<v>/schemas/{requests,responses}/`;
+  routers stay thin and delegate to use cases; no schema classes inside router modules.
+- Every request/response model sets `model_config = ConfigDict(extra="forbid")` and declares
+  field constraints with `Field(...)` instead of re-validating by hand.
+- Settings only through the `BaseSettings` module and `get_settings()`; no `os.environ`
+  elsewhere.
+- Domain errors map to HTTP in one place (exception handlers registered by the app factory),
+  with one error response shape; routes declare their error `responses=`.
+- Dependencies are real FastAPI providers wired in the app factory, not stubs that raise.
+
 ## Commit policy
 
 - **Conventional Commits** are mandatory on the subject line:
@@ -131,8 +163,9 @@ inbound HTTP boundary. `pyproject.toml` carries a commented `[tool.importlinter]
 skeleton — uncomment and enforce it once the package actually has layers.
 
 Agreed layout for the backend (ADR-0001, to be enforced once the packages exist):
-`entrypoints` (FastAPI app factory, settings, dependency wiring) -> `api` (per-area
-routers, Pydantic schemas, use cases) -> `database` (SQLModel tables, repositories,
+`entrypoints` (FastAPI app factory, settings, dependency wiring) -> `api` (versioned
+`api/<v>/` with `routers/` and `schemas/{requests,responses}/` per CES-17, plus use cases) ->
+`database` (SQLModel tables, repositories,
 Alembic) -> `core` (entities, rules, Timer state machine, repository Protocols; no
 framework imports). The package moves under `backend/` when implementation starts.
 
