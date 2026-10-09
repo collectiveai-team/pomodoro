@@ -19,6 +19,8 @@ from pomodoro.database.rows import require_id
 from pomodoro.database.timestamps import as_utc
 
 if TYPE_CHECKING:
+    from datetime import datetime
+
     from sqlmodel import Session
 
 
@@ -45,6 +47,16 @@ class SqlPomodoroRepository:
             select(tables.Pomodoro).where(
                 tables.Pomodoro.user_id == user_id,
                 tables.Pomodoro.status == PomodoroStatus.COMPLETED.value,
+            )
+        ).all()
+        return [_to_entity(row) for row in rows]
+
+    def list_in_range(self, user_id: UserId, start: datetime, end: datetime) -> list[Pomodoro]:
+        rows = self._session.exec(
+            select(tables.Pomodoro).where(
+                tables.Pomodoro.user_id == user_id,
+                tables.Pomodoro.ended_at >= start,
+                tables.Pomodoro.ended_at < end,
             )
         ).all()
         return [_to_entity(row) for row in rows]

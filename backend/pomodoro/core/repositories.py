@@ -197,3 +197,12 @@ class PomodoroRepository(Protocol):
     def list_completed(self, user_id: UserId) -> list[Pomodoro]:
         """Return every completed Pomodoro for `user_id` (day summary, Break cadence)."""
         ...
+
+    def list_in_range(self, user_id: UserId, start: datetime, end: datetime) -> list[Pomodoro]:
+        """Return `user_id`'s finished Pomodoros ending in `[start, end)` (both statuses).
+
+        `start`/`end` are aware UTC instants covering the month/day a History
+        query needs (T16); grouping by local day happens in Python via
+        `core.history`, never in this query (ADR-0002).
+        """
+        ...
