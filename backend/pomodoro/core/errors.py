@@ -62,3 +62,18 @@ class TaskHasPomodorosError(DomainError):
             "archive it instead."
         )
         self.task_id = task_id
+
+
+class TagNameEmptyError(DomainError):
+    """Raised when a Tag's name is empty once surrounding whitespace is stripped."""
+
+    def __init__(self) -> None:
+        super().__init__("Tag name cannot be empty.")
+
+
+class TagRenameCollisionError(DomainError):
+    """Raised when renaming a Tag would collide with another of the User's Tags."""
+
+    def __init__(self, name: str) -> None:
+        super().__init__(f"A Tag named {name!r} already exists.")
+        self.name = name
