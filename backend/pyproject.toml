@@ -43,6 +43,9 @@ disable-project-excludes-heuristics = true
 # MARK: import-linter (CES-5 layer direction, CES-17 api-boundary layout)
 [tool.importlinter]
 root_package = "pomodoro"
+# Required once any contract forbids an external (non-"pomodoro.*") module, as the new
+# core-is-framework-free contract below does.
+include_external_packages = true
 
 [[tool.importlinter.contracts]]
 name = "Layered architecture (CES-5)"
@@ -67,6 +70,15 @@ name = "API is the only inbound boundary (CES-17)"
 type = "forbidden"
 source_modules = ["pomodoro.core", "pomodoro.database"]
 forbidden_modules = ["pomodoro.api"]
+
+# core stays framework-free (ADR-0001, CES-16): entities, rules and the Timer state
+# machine never import fastapi/sqlmodel/pydantic, so they stay testable with no app
+# context and no database.
+[[tool.importlinter.contracts]]
+name = "core is framework-free (ADR-0001)"
+type = "forbidden"
+source_modules = ["pomodoro.core"]
+forbidden_modules = ["fastapi", "sqlmodel", "pydantic"]
 
 # MARK: Pytest
 [tool.pytest.ini_options]
