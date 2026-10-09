@@ -14,7 +14,16 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from datetime import datetime
 
-    from pomodoro.core.entities import AuthSession, AuthSessionId, Task, TaskId, User, UserId
+    from pomodoro.core.entities import (
+        AuthSession,
+        AuthSessionId,
+        Tag,
+        TagId,
+        Task,
+        TaskId,
+        User,
+        UserId,
+    )
 
 
 class UserRepository(Protocol):
@@ -133,4 +142,29 @@ class TaskRepository(Protocol):
 
     def task_ids_with_pomodoros(self, user_id: UserId) -> frozenset[TaskId]:
         """Return the ids of `user_id`'s Tasks that have at least one recorded Pomodoro."""
+        ...
+
+
+class TagRepository(Protocol):
+    """Persistence port for `Tag` (`database.tag_repository.SqlTagRepository`, T12).
+
+    Every method takes the owning `UserId` explicitly and the implementation
+    filters by it at the SQL level, mirroring `TaskRepository` (T10) so
+    cross-User leakage is impossible by construction.
+    """
+
+    def list_for_user(self, user_id: UserId) -> list[Tag]:
+        """Return every Tag belonging to `user_id`, including ones with zero Tasks."""
+        ...
+
+    def get(self, user_id: UserId, tag_id: TagId) -> Tag | None:
+        """Return `user_id`'s Tag with `tag_id`, or `None` if it doesn't exist for them."""
+        ...
+
+    def update_name(self, user_id: UserId, tag_id: TagId, *, name: str) -> Tag:
+        """Rename `user_id`'s Tag, raising `TagRenameCollisionError` on a `name_key` collision."""
+        ...
+
+    def delete(self, user_id: UserId, tag_id: TagId) -> None:
+        """Permanently delete `user_id`'s Tag with `tag_id`; cascades via `task_tags` FKs."""
         ...
