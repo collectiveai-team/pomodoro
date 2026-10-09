@@ -18,7 +18,9 @@ from pomodoro.core.logger import get_logger
 from pomodoro.core.tasks import (
     DuplicateTaskTextError,
     EmptyTaskTextError,
+    TaskHasRecordedPomodorosError,
     TaskNotFoundError,
+    TaskReorderMismatchError,
     TaskTextTooLongError,
 )
 from pomodoro.core.users import (
@@ -54,6 +56,8 @@ _DOMAIN_ERROR_HANDLERS: list[tuple[type[Exception], int, str]] = [
     (TaskTextTooLongError, 422, "task_text_too_long"),
     (DuplicateTaskTextError, 422, "duplicate_task_text"),
     (TaskNotFoundError, 404, "task_not_found"),
+    (TaskReorderMismatchError, 422, "task_reorder_mismatch"),
+    (TaskHasRecordedPomodorosError, 409, "task_has_recorded_pomodoros"),
 ]
 
 

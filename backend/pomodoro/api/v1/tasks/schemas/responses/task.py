@@ -19,3 +19,4 @@ class TaskResponse(BaseModel):
     tag_ids: list[UUID]
     created_at: datetime
     archived_at: datetime | None
+    deletable: bool

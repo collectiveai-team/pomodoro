@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, NewType, Protocol
 from uuid import UUID
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Sequence
     from datetime import datetime
 
     from pomodoro.core.users import UserId
@@ -37,6 +37,14 @@ class DuplicateTaskTextError(ValueError):
 
 class TaskNotFoundError(LookupError):
     """Raised when a Task does not exist, or does not belong to the caller."""
+
+
+class TaskReorderMismatchError(ValueError):
+    """Raised when a reorder request's ids aren't exactly the caller's Active Task ids, once."""
+
+
+class TaskHasRecordedPomodorosError(ValueError):
+    """Raised when deleting a Task that has at least one Pomodoro recorded against it."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,6 +86,23 @@ def next_active_position(active_tasks: Iterable[Task]) -> int:
     return min(positions) - 1 if positions else 0
 
 
+def next_unarchive_position(active_tasks: Iterable[Task]) -> int:
+    """Return the position for an unarchived Task: one past the highest Active position, else 0."""
+    positions = [task.position for task in active_tasks]
+    return max(positions) + 1 if positions else 0
+
+
+def ensure_reorder_covers_active_tasks(
+    ordered_task_ids: Sequence[TaskId], active_tasks: Iterable[Task]
+) -> None:
+    """Raise `TaskReorderMismatchError` unless `ordered_task_ids` is a permutation of Active ids."""
+    active_ids = {task.id for task in active_tasks}
+    if len(ordered_task_ids) != len(set(ordered_task_ids)) or set(ordered_task_ids) != active_ids:
+        raise TaskReorderMismatchError(
+            "Reorder must include exactly the caller's Active Task ids, each exactly once."
+        )
+
+
 def ensure_unique_active_text(
     *, text_key: str, active_tasks: Iterable[Task], exclude_task_id: TaskId | None = None
 ) -> None:
@@ -106,4 +131,36 @@ class TaskRepository(Protocol):
 
     def update_text(self, user_id: UserId, task_id: TaskId, text: str, text_key: str) -> None:
         """Overwrite a Task's text and derived key."""
+        ...
+
+    def list_archived(self, user_id: UserId) -> list[Task]:
+        """Return the caller's Archived Tasks ordered by `archived_at` descending."""
+        ...
+
+    def count_active(self, user_id: UserId) -> int:
+        """Return the number of the caller's Active Tasks."""
+        ...
+
+    def count_archived(self, user_id: UserId) -> int:
+        """Return the number of the caller's Archived Tasks."""
+        ...
+
+    def archive(self, user_id: UserId, task_id: TaskId, archived_at: datetime) -> None:
+        """Freeze `position` and set `archived_at` on the caller's Task."""
+        ...
+
+    def unarchive(self, user_id: UserId, task_id: TaskId, position: int) -> None:
+        """Clear `archived_at` and set the caller's Task to `position`."""
+        ...
+
+    def reorder(self, user_id: UserId, ordered_task_ids: Sequence[TaskId]) -> None:
+        """Rewrite the caller's Active Tasks' `position` as `0..n-1`, following this order."""
+        ...
+
+    def delete(self, user_id: UserId, task_id: TaskId) -> None:
+        """Permanently remove the caller's Task."""
+        ...
+
+    def task_ids_with_pomodoros(self, user_id: UserId) -> frozenset[TaskId]:
+        """Return the ids of the caller's Tasks that have at least one Pomodoro recorded."""
         ...

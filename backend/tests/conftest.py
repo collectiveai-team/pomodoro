@@ -23,6 +23,8 @@ from sqlmodel import Session, SQLModel
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
+    from sqlalchemy import Engine
+
 
 class FakeClock:
     """A `Clock` whose `now()` is advanced by hand instead of sleeping (ADR-0003)."""
@@ -46,15 +48,25 @@ def fake_clock() -> FakeClock:
 
 
 @pytest.fixture
-def client(fake_clock: FakeClock) -> Iterator[TestClient]:
-    """Yield a `TestClient` for the real app, wired to a fresh in-memory DB and `fake_clock`."""
+def db_engine() -> Engine:
+    """Return a fresh in-memory engine with every table created, shared by `client`.
+
+    Exposed separately so a test can reach into the database directly for state the API itself
+    has no endpoint for yet (e.g. inserting a `pomodoro` row before the Timer ticket lands).
+    """
     engine = build_engine(
         "sqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False}
     )
     SQLModel.metadata.create_all(engine)
+    return engine
+
+
+@pytest.fixture
+def client(db_engine: Engine, fake_clock: FakeClock) -> Iterator[TestClient]:
+    """Yield a `TestClient` for the real app, wired to `db_engine` and `fake_clock`."""
 
     def _get_test_db_session() -> Iterator[Session]:
-        with Session(engine) as session:
+        with Session(db_engine) as session:
             yield session
 
     app = create_app()

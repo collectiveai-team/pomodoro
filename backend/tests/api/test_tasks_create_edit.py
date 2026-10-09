@@ -60,7 +60,7 @@ def test_get_tasks_lists_active_tasks_newest_first_by_position_then_id(
     response = client.get(TASKS_URL)
 
     assert response.status_code == 200
-    texts = [task["text"] for task in response.json()]
+    texts = [task["text"] for task in response.json()["tasks"]]
     assert texts == ["C", "B", "A"]
 
 
@@ -110,7 +110,7 @@ def test_edit_task_updates_its_text(client: TestClient) -> None:
     assert response.json()["text"] == "Write the report"
 
     listed = client.get(TASKS_URL).json()
-    assert listed[0]["text"] == "Write the report"
+    assert listed["tasks"][0]["text"] == "Write the report"
 
 
 def test_edit_task_rejects_empty_text(client: TestClient) -> None:
@@ -155,7 +155,7 @@ def test_one_user_never_sees_another_user_tasks(client: TestClient) -> None:
     response = client.get(TASKS_URL)
 
     assert response.status_code == 200
-    assert response.json() == []
+    assert response.json()["tasks"] == []
 
 
 def test_one_user_cannot_edit_another_user_task(client: TestClient) -> None:

@@ -2,13 +2,20 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from fastapi import Depends
 from sqlmodel import Session, select
 
 from pomodoro.core.tasks import Task, TaskId, TaskRepository
 from pomodoro.core.users import UserId
+from pomodoro.database.models.pomodoro import PomodoroTable
 from pomodoro.database.models.task import TaskTable
 from pomodoro.database.session import get_db_session
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+    from datetime import datetime
 
 
 class SqlTaskRepository:
@@ -60,6 +67,92 @@ class SqlTaskRepository:
         row.text_key = text_key
         self._session.add(row)
         self._session.commit()
+
+    def list_archived(self, user_id: UserId) -> list[Task]:
+        """Return the caller's Archived Tasks ordered by `archived_at` descending."""
+        rows = self._session.exec(
+            select(TaskTable)
+            .where(
+                TaskTable.user_id == user_id,
+                TaskTable.archived_at.is_not(None),  # pyrefly: ignore[missing-attribute]
+            )
+            .order_by(TaskTable.archived_at.desc())  # pyrefly: ignore[missing-attribute]
+        ).all()
+        return [_to_entity(row) for row in rows]
+
+    def count_active(self, user_id: UserId) -> int:
+        """Return the number of the caller's Active Tasks."""
+        return len(
+            self._session.exec(
+                select(TaskTable.id).where(
+                    TaskTable.user_id == user_id,
+                    TaskTable.archived_at.is_(None),  # pyrefly: ignore[missing-attribute]
+                )
+            ).all()
+        )
+
+    def count_archived(self, user_id: UserId) -> int:
+        """Return the number of the caller's Archived Tasks."""
+        return len(
+            self._session.exec(
+                select(TaskTable.id).where(
+                    TaskTable.user_id == user_id,
+                    TaskTable.archived_at.is_not(None),  # pyrefly: ignore[missing-attribute]
+                )
+            ).all()
+        )
+
+    def archive(self, user_id: UserId, task_id: TaskId, archived_at: datetime) -> None:
+        """Freeze `position` and set `archived_at` on the caller's Task."""
+        row = self._session.get(TaskTable, task_id)
+        if row is None or row.user_id != user_id:
+            return
+        row.archived_at = archived_at
+        self._session.add(row)
+        self._session.commit()
+
+    def unarchive(self, user_id: UserId, task_id: TaskId, position: int) -> None:
+        """Clear `archived_at` and set the caller's Task to `position`."""
+        row = self._session.get(TaskTable, task_id)
+        if row is None or row.user_id != user_id:
+            return
+        row.archived_at = None
+        row.position = position
+        self._session.add(row)
+        self._session.commit()
+
+    def reorder(self, user_id: UserId, ordered_task_ids: Sequence[TaskId]) -> None:
+        """Rewrite the caller's Active Tasks' `position` as `0..n-1`, following this order."""
+        rows_by_id = {
+            row.id: row
+            for row in self._session.exec(
+                select(TaskTable).where(
+                    TaskTable.user_id == user_id,
+                    TaskTable.archived_at.is_(None),  # pyrefly: ignore[missing-attribute]
+                )
+            ).all()
+        }
+        for position, task_id in enumerate(ordered_task_ids):
+            row = rows_by_id.get(task_id)
+            if row is not None:
+                row.position = position
+                self._session.add(row)
+        self._session.commit()
+
+    def delete(self, user_id: UserId, task_id: TaskId) -> None:
+        """Permanently remove the caller's Task."""
+        row = self._session.get(TaskTable, task_id)
+        if row is None or row.user_id != user_id:
+            return
+        self._session.delete(row)
+        self._session.commit()
+
+    def task_ids_with_pomodoros(self, user_id: UserId) -> frozenset[TaskId]:
+        """Return the ids of the caller's Tasks that have at least one Pomodoro recorded."""
+        rows = self._session.exec(
+            select(PomodoroTable.task_id).where(PomodoroTable.user_id == user_id)
+        ).all()
+        return frozenset(TaskId(task_id) for task_id in rows)
 
 
 def _to_entity(row: TaskTable) -> Task:
