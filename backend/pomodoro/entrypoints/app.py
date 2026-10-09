@@ -13,7 +13,7 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from pomodoro.api.v1 import dependencies as api_dependencies
-from pomodoro.api.v1.routers import auth, health, tags, tasks, timer
+from pomodoro.api.v1.routers import auth, health, settings, tags, tasks, timer
 from pomodoro.api.v1.schemas.responses.errors import ErrorResponse
 from pomodoro.core.errors import DomainError, TimerActionNotAllowedError
 from pomodoro.core.logger import get_logger
@@ -70,6 +70,7 @@ def create_app() -> FastAPI:
     app.include_router(tasks.router, prefix="/api/v1")
     app.include_router(tags.router, prefix="/api/v1")
     app.include_router(timer.router, prefix="/api/v1")
+    app.include_router(settings.router, prefix="/api/v1")
 
     return app
 
