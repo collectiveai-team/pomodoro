@@ -82,10 +82,12 @@ stages = ["commit-msg"]
 # here rather than the Python-only hooks. Respects .gitignore by default. `--threshold` alone is
 # the gate (fails only over the percentage); jscpd v5's separate `--exit-code` flag fails on ANY
 # clone found regardless of threshold — do not combine the two or the threshold becomes inert.
+# `.agents/snippets/` is deliberately mirrored: CES-74 requires backend/pomodoro/core/logger.py
+# to be the house logger snippet copied verbatim, so the two are meant to be identical.
 [[repos.hooks]]
 id = "jscpd"
 name = "jscpd (copy-paste duplication)"
-entry = "npx --yes jscpd@5 . --threshold 1"
+entry = "npx --yes jscpd@5 . --threshold 1 -i \".agents/snippets/**\""
 language = "system"
 pass_filenames = false
 priority = 2

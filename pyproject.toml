@@ -7,7 +7,7 @@ build-backend = "hatchling.build"
 source = "vcs"
 
 [tool.hatch.build.targets.wheel]
-packages = ["pomodoro"]
+packages = ["backend/pomodoro"]
 
 # MARK: Ruff
 [tool.ruff]
@@ -87,7 +87,22 @@ max-complexity = 10
 ban-relative-imports = "all"
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101", "INP001", "S603", "S607"]
+"backend/tests/**" = ["S101", "INP001", "S603", "S607"]
+# CES-74 (core-logger): shipped verbatim from .agents/snippets/core/logger.py; its bootstrap
+# os.getenv line and the cached-config `global` are the house snippet's own design, not ours to
+# edit.
+"backend/pomodoro/core/logger.py" = ["E501", "PLW0603"]
+
+# FastAPI's dependency-injection idiom is `param: T = Depends(...)` — calling Depends() in an
+# argument default is the documented pattern, not the footgun B008 otherwise guards against.
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Path", "fastapi.Header", "fastapi.Body"]
+
+# Pydantic (and pydantic-settings) resolve field annotations at class-creation time, so types
+# used only in a BaseModel/BaseSettings subclass's fields must stay real imports, never moved
+# into a `TYPE_CHECKING` block.
+[tool.ruff.lint.flake8-type-checking]
+runtime-evaluated-base-classes = ["pydantic.BaseModel", "pydantic_settings.BaseSettings"]
 
 # MARK: Pyrefly
 [tool.pyrefly]
@@ -109,31 +124,28 @@ use-ignore-files = false
 disable-project-excludes-heuristics = true
 
 # MARK: import-linter (CES-5 layer direction, CES-17 api-boundary layout)
-# Commented skeleton — uncomment once the package actually has layers. Enforces the house import
-# direction: entrypoints -> api -> database/impl -> core (a higher layer may import lower ones,
-# never the reverse). Add `import-linter` to the dev group and run `uvx --from import-linter
-# lint-imports`. Replace `myapp` below with your import package name.
-#
-# [tool.importlinter]
-# root_package = "myapp"
-#
-# [[tool.importlinter.contracts]]
-# name = "Layered architecture (CES-5)"
-# type = "layers"
-# layers = [
-#   "myapp.entrypoints",
-#   "myapp.api",
-#   "myapp.database | myapp.impl",
-#   "myapp.core",
-# ]
-#
-# # CES-17 api-boundary layout: the api package is the only inbound HTTP boundary; nothing
-# # outside api may import api.schemas/routers internals.
-# [[tool.importlinter.contracts]]
-# name = "API is the only inbound boundary (CES-17)"
-# type = "forbidden"
-# source_modules = ["myapp.core", "myapp.database"]
-# forbidden_modules = ["myapp.api"]
+# Enforces the house import direction: entrypoints -> api -> database -> core (a higher layer
+# may import lower ones, never the reverse). Run with `uv run lint-imports`.
+[tool.importlinter]
+root_package = "pomodoro"
+
+[[tool.importlinter.contracts]]
+name = "Layered architecture (CES-5)"
+type = "layers"
+layers = [
+  "pomodoro.entrypoints",
+  "pomodoro.api",
+  "pomodoro.database",
+  "pomodoro.core",
+]
+
+# CES-17 api-boundary layout: the api package is the only inbound HTTP boundary; nothing
+# outside api may import api.schemas/routers internals.
+[[tool.importlinter.contracts]]
+name = "API is the only inbound boundary (CES-17)"
+type = "forbidden"
+source_modules = ["pomodoro.core", "pomodoro.database"]
+forbidden_modules = ["pomodoro.api"]
 
 # MARK: Pytest
 [tool.pytest.ini_options]
@@ -143,7 +155,7 @@ disable-project-excludes-heuristics = true
 addopts = ["--import-mode=importlib"]
 consider_namespace_packages = false
 asyncio_mode = "auto"
-testpaths = ["tests"]
+testpaths = ["backend/tests"]
 markers = [
   "unit: fast isolated tests, no external deps",
   "integration: tests requiring external services or multi-component interaction",
@@ -161,7 +173,12 @@ readme = "README.md"
 requires-python = ">=3.14"
 
 # MARK: Dependencies
-dependencies = []
+dependencies = [
+  "fastapi>=0.115",
+  "pydantic>=2.9",
+  "pydantic-settings>=2.6",
+  "structlog>=24.4",
+]
 
 # MARK: Extra deps
 [dependency-groups]
@@ -173,10 +190,25 @@ dev = [
   # order on every run — catches state-leaking/order-dependent tests for free.
   "pytest-randomly>=4.1.0",
   "ruff>=0.7.0",
+  # CES-5 (import-linter): enforces the layers contract below; exposes `lint-imports`.
+  "import-linter>=2.1",
+  # Pulled in transitively by fastapi.testclient.TestClient (starlette's optional extra); never
+  # imported by name in our code, so deptry needs the DEP002 ignore below.
+  "httpx>=0.27",
 ]
 
 # MARK: deptry
 # .agents/snippets/ are botica drop-in templates (they import pydantic/structlog before the app
-# adopts them); .worktrees/.orquestalite are local checkouts and agent run state.
+# adopts them); .worktrees/.orquestalite are local checkouts and agent run state. deptry's
+# default `tests` exclude only matches a root-level `tests/` dir (re.match, unanchored suffix),
+# so it misses the relocated `backend/tests/` — add it explicitly. `pomodoro` lives two levels
+# deep (`backend/pomodoro`), below deptry's first-party auto-detection depth, so it must be
+# named explicitly too.
 [tool.deptry]
-extend_exclude = [".agents", ".claude", ".worktrees", ".orquestalite"]
+extend_exclude = [".agents", ".claude", ".worktrees", ".orquestalite", "backend/tests"]
+known_first_party = ["pomodoro"]
+
+[tool.deptry.per_rule_ignores]
+# import-linter ships the `lint-imports` console script, never imported by name.
+# httpx is TestClient's runtime dependency, never imported directly in our code.
+DEP002 = ["import-linter", "httpx"]
