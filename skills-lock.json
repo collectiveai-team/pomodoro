@@ -2,10 +2,10 @@
   "version": 1,
   "skills": {
     "ask-user": {
-      "source": "collectiveai-team/scaffolding",
+      "source": "collectiveai-team/botica",
       "sourceType": "github",
       "skillPath": "skills/productivity/ask-user/SKILL.md",
-      "computedHash": "041d4927473b52ff75aadfd49c16d83de6fee98574b91aed701292354defa1fc"
+      "computedHash": "10eac28d69a301f3cf009a2598ea9b7fb31b232bc0cce74fdc62946c0fbeceb4"
     },
     "code-review": {
       "source": "mattpocock/skills",
@@ -35,6 +35,24 @@
       "skillPath": "skills/engineering/domain-modeling/SKILL.md",
       "computedHash": "363cb0f53b0b431e7c00086ad1f823500b7e1b70b5616ee969c979f0934e9e6e"
     },
+    "engineering-pr-review": {
+      "source": "collectiveai-team/botica",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/engineering-pr-review/SKILL.md",
+      "computedHash": "0aed66c076deaa6038a126e451563520d70c33d452d9aa2e6bb8d151502a2186"
+    },
+    "engineering-refactor": {
+      "source": "collectiveai-team/botica",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/engineering-refactor/SKILL.md",
+      "computedHash": "9c5372f2fec0dfa492971f097302d98257f799573bcbc86e8dcc9929f967fdca"
+    },
+    "engineering-rules": {
+      "source": "collectiveai-team/botica",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/engineering-rules/SKILL.md",
+      "computedHash": "c60d1eba81a7379e203048090d21cc3ffdf2b0d602920b30236ded1ddcc39ef8"
+    },
     "grill-me": {
       "source": "mattpocock/skills",
       "ref": "v1.2.3",
@@ -57,7 +75,7 @@
       "computedHash": "4ebdd12fe61ff3abf20cff6683740e2b9b3739454be0a3f4a928a1c4d07d6b34"
     },
     "handoff": {
-      "source": "collectiveai-team/scaffolding",
+      "source": "collectiveai-team/botica",
       "sourceType": "github",
       "skillPath": "skills/productivity/handoff/SKILL.md",
       "computedHash": "c34764f07a21c978051aa0566e751d2ef9dae940a3c4742c201b94b22a43d2b7"
@@ -77,7 +95,7 @@
       "computedHash": "bce096b49db40761adb1d5348f064c303fc152e4e50fc3fd81b79df8b6cf137f"
     },
     "journalist": {
-      "source": "collectiveai-team/scaffolding",
+      "source": "collectiveai-team/botica",
       "sourceType": "github",
       "skillPath": "skills/productivity/journalist/SKILL.md",
       "computedHash": "4779f37e8e409343870be2faab18cd70b1b233ca31756c316ac87405319a3c55"
@@ -125,10 +143,10 @@
       "computedHash": "68999bb1a241384b2f921f3321d779b7d05eb6089077b70d88cee2aee3d75ccc"
     },
     "test-smell-review": {
-      "source": "collectiveai-team/scaffolding",
+      "source": "collectiveai-team/botica",
       "sourceType": "github",
       "skillPath": "skills/quality/test-smell-review/SKILL.md",
-      "computedHash": "fcb815a9f6aaec5bb3339174232cf513b8b25e2d14b1fa5e6b3ca732a5eda358"
+      "computedHash": "8185b78e956dc00c994ace9e75cfae98763fe38e3f9a5123722b1053fbaefd0d"
     },
     "to-spec": {
       "source": "mattpocock/skills",

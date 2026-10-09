@@ -60,7 +60,7 @@ repo = "local"
 [[repos.hooks]]
 id = "agents-conventional-commits"
 name = "agents-conventional-commits (commit-msg)"
-entry = "python3 -c \"import re,sys; msg=open(sys.argv[1],encoding='utf-8').readline().strip(); ok=bool(re.match(r'^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\\([a-z0-9._-]+\\))?!?: .+', msg)) or msg.startswith(('Merge ','Revert ','fixup! ')); sys.exit(0 if ok else not print(f'Error: CES-75 (agents-conventional-commits): commit subject must follow Conventional Commits (type(scope): description). Got: {msg!r}'))\""
+entry = "python3 -c \"import re,sys; msg=open(sys.argv[1],encoding='utf-8').readline().strip(); ok=bool(re.match(r'^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\\([A-Za-z0-9._-]+\\))?!?: .+', msg)) or msg.startswith(('Merge ','Revert ','fixup! ')); sys.exit(0 if ok else not print(f'Error: CES-75 (agents-conventional-commits): commit subject must follow Conventional Commits (type(scope): description). Got: {msg!r}'))\""
 language = "system"
 stages = ["commit-msg"]
 

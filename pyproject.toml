@@ -12,6 +12,10 @@ packages = ["pomodoro"]
 # MARK: Ruff
 [tool.ruff]
 line-length = 100
+# .agents/snippets/ are botica drop-in templates copied verbatim into the repo (CES snippets), not
+# part of this package; .claude/.worktrees/.orquestalite are agent tooling and local checkouts.
+extend-exclude = [".agents", ".claude", ".worktrees", ".orquestalite"]
+force-exclude = true
 
 [tool.ruff.format]
 quote-style = "double"
@@ -93,6 +97,13 @@ project-excludes = [
   "**/venv/**/*",
   "**/.venv/**/*",
   "**/.uv_cache/**/*",
+  ".agents/**",
+  ".claude/**",
+  ".worktrees/**",
+  ".orquestalite/**",
+  ".tmp/**",
+  ".scratch/**",
+  ".journals/**",
 ]
 use-ignore-files = false
 disable-project-excludes-heuristics = true
@@ -163,3 +174,9 @@ dev = [
   "pytest-randomly>=4.1.0",
   "ruff>=0.7.0",
 ]
+
+# MARK: deptry
+# .agents/snippets/ are botica drop-in templates (they import pydantic/structlog before the app
+# adopts them); .worktrees/.orquestalite are local checkouts and agent run state.
+[tool.deptry]
+extend_exclude = [".agents", ".claude", ".worktrees", ".orquestalite"]

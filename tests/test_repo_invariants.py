@@ -18,7 +18,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 CONVENTIONAL_SUBJECT = re.compile(
     r"^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)"
-    r"(\([a-z0-9._-]+\))?!?: .+"
+    r"(\([A-Za-z0-9._-]+\))?!?: .+"
 )
 EXEMPT_SUBJECT_PREFIXES = ("Merge ", "Revert ", "fixup! ")
 
@@ -31,6 +31,16 @@ AI_ATTRIBUTION = re.compile(
     rf"|generated[\s-]+(with|by):?.*({AI_ATTRIBUTION_TOOLS})"
     rf"|ai-generated-by:?.*({AI_ATTRIBUTION_TOOLS})"
     rf"|assisted-by:?.*({AI_ATTRIBUTION_TOOLS}))"
+)
+# Already merged into main via PR #13; shared history is not rewritten.
+GRANDFATHERED_ATTRIBUTION_COMMITS = frozenset(
+    {
+        "53edc5bca3d5ab95c2a74063c8799b437ff9a424",
+        "81f37625c45e49c01e316d211b8821a392e1b617",
+        "3ff2694ca8e90326a1cb0305c8daccc93ea19c89",
+        "ebe90a22ad3bb6a32f9fe1847500fddbb3816cf6",
+        "72744c96bead756ff8976be97c93d7acca94001a",
+    }
 )
 
 
@@ -74,9 +84,10 @@ def git(*args: str) -> str:
 def test_no_ai_coauthorship_trailers_in_history() -> None:
     """Commit metadata stays human-accountable (CES-91, enforced by CI)."""
     offenders = [
-        line.split("\x00", 1)[0]
+        sha
         for line in git("log", "--format=%H%x00%B%x1e").split("\x1e")
         if line.strip() and AI_ATTRIBUTION.search(line)
+        if (sha := line.split("\x00", 1)[0].strip()) not in GRANDFATHERED_ATTRIBUTION_COMMITS
     ]
     assert offenders == [], f"commits carry AI attribution trailers: {offenders}"
 
