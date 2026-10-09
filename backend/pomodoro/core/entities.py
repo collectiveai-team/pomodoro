@@ -22,6 +22,7 @@ UserId = NewType("UserId", int)
 TaskId = NewType("TaskId", int)
 TagId = NewType("TagId", int)
 PomodoroId = NewType("PomodoroId", int)
+AuthSessionId = NewType("AuthSessionId", int)
 
 
 def _require_aware(value: datetime, field_name: str) -> None:
@@ -108,6 +109,27 @@ class Task:
     def status(self) -> TaskStatus:
         """Active/Archived, derived from `archived_at`."""
         return TaskStatus.ARCHIVED if self.archived_at is not None else TaskStatus.ACTIVE
+
+
+@dataclass(frozen=True, slots=True)
+class AuthSession:
+    """A revocable, opaque-token login session for a User (T7/T8).
+
+    The raw token is never stored or carried here, only `token_hash` — a hash of
+    it, analogous to `User.password_hash` never appearing on `User` itself.
+    """
+
+    id: AuthSessionId
+    user_id: UserId
+    token_hash: str
+    created_at: datetime
+    last_used_at: datetime
+    expires_at: datetime
+
+    def __post_init__(self) -> None:
+        _require_aware(self.created_at, "created_at")
+        _require_aware(self.last_used_at, "last_used_at")
+        _require_aware(self.expires_at, "expires_at")
 
 
 @dataclass(frozen=True, slots=True)

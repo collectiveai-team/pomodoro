@@ -14,9 +14,9 @@ extend = "../pyproject.toml"
 [tool.ruff.lint.per-file-ignores]
 # The inherited root config's "tests/**" entry is defined relative to *its own*
 # directory, so it does not reach this project's nested tests/ — repeated here.
-# S106 (possible hardcoded password): fixture hashes/tokens here are deliberate test
-# literals, never real secrets.
-"tests/**" = ["S101", "INP001", "S603", "S607", "S106"]
+# S105/S106/S107 (possible hardcoded password): fixture hashes/tokens/passwords here
+# are deliberate test literals, never real secrets.
+"tests/**" = ["S101", "INP001", "S603", "S607", "S105", "S106", "S107"]
 # FastAPI resolves dependencies by parameter default (`Depends(...)`), which ruff's
 # flake8-bugbear otherwise flags as a mutable/call-in-default-argument hazard.
 "pomodoro/api/**" = ["B008"]
@@ -116,6 +116,11 @@ dependencies = [
   "sqlalchemy>=2.0.35",
   "sqlmodel>=0.0.22",
   "structlog>=24.4.0",
+  # Argon2 password hashing (T7): `PasswordHash.recommended()` uses Argon2 only
+  # when the `argon2` extra is installed.
+  "pwdlib[argon2]>=0.2.1",
+  # Email syntax validation + normalization for registration/login (T7).
+  "email-validator>=2.2.0",
   # PostgreSQL DBAPI driver for `postgresql://` DATABASE_URLs in production (ADR-0002);
   # SQLAlchemy's postgresql dialect imports it directly, so it must be a real runtime
   # dependency, not a dev/test-only one. [binary] ships prebuilt wheels so prod images

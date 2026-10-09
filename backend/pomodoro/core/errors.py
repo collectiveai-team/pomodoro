@@ -79,6 +79,34 @@ class TagRenameCollisionError(DomainError):
         self.name = name
 
 
+class EmailInvalidError(DomainError):
+    """Raised when an email fails syntax validation."""
+
+    def __init__(self, email: str) -> None:
+        super().__init__(f"Email address {email!r} is not valid.")
+        self.email = email
+
+
+class DuplicateEmailError(DomainError):
+    """Raised when registering an email that collides with an existing User's."""
+
+    def __init__(self, email: str) -> None:
+        super().__init__(f"An account with the email {email!r} already exists.")
+        self.email = email
+
+
+class PasswordLengthError(DomainError):
+    """Raised when a password's length is outside the allowed range.
+
+    Never carries the password itself, only the bounds it violated.
+    """
+
+    def __init__(self, min_length: int, max_length: int) -> None:
+        super().__init__(f"Password must be between {min_length} and {max_length} characters.")
+        self.min_length = min_length
+        self.max_length = max_length
+
+
 class TimerActionNotAllowedError(DomainError):
     """Raised when a Timer action doesn't match its current phase; `api` maps this to 409."""
 
