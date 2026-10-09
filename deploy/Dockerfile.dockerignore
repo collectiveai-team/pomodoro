@@ -1,0 +1,19 @@
+# Context for deploy/Dockerfile: only what it copies.
+**
+!pyproject.toml
+!uv.lock
+!alembic.ini
+!backend/
+!frontend/
+!deploy/nginx.conf.template
+!deploy/entrypoint.sh
+**/__pycache__/
+**/*.py[cod]
+frontend/node_modules/
+frontend/.next/
+# Untracked local files must never reach the image, even under the re-included directories.
+**/.env*
+**/*.db
+**/.tmp/
+**/.venv/
+**/node_modules/

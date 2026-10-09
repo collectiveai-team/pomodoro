@@ -1,0 +1,128 @@
+name: deploy
+
+# Cloud Run deploy (docs/deploy.md). Every push to main builds the image once and deploys it to
+# QA; publishing a GitHub Release promotes that same image to prod after a reviewer approves.
+# main's branch protection requires the CI checks, so a push to main is already green.
+
+on:
+  push:
+    branches: [main]
+  release:
+    types: [published]
+
+permissions: {}
+
+# One run per event type at a time, never cancelled: a newer push's pending run replaces an older
+# pending one, so builds and QA deploys land in order.
+concurrency:
+  group: deploy-${{ github.event_name }}
+  cancel-in-progress: false
+
+env:
+  IMAGE_REPOSITORY: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/pomodoro/pomodoro-app
+
+jobs:
+  build:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      image: ${{ steps.image.outputs.image }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.DEPLOYER_SA }}
+
+      - uses: google-github-actions/setup-gcloud@v3
+
+      - id: image
+        run: echo "image=${IMAGE_REPOSITORY}:${GITHUB_SHA}" >>"$GITHUB_OUTPUT"
+
+      - name: Build and push
+        env:
+          IMAGE: ${{ steps.image.outputs.image }}
+          REGISTRY: ${{ vars.GCP_REGION }}-docker.pkg.dev
+        run: |
+          gcloud auth configure-docker "$REGISTRY" --quiet
+          docker build -f deploy/Dockerfile -t "$IMAGE" .
+          docker push "$IMAGE"
+
+  deploy-qa:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: qa
+      url: ${{ steps.deploy.outputs.url }}
+    concurrency:
+      group: deploy-qa
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - id: deploy
+        uses: ./.github/actions/deploy-env
+        with:
+          image: ${{ needs.build.outputs.image }}
+          workload-identity-provider: ${{ vars.WIF_PROVIDER }}
+          service-account: ${{ vars.DEPLOYER_SA }}
+          region: ${{ vars.GCP_REGION }}
+          service-name: ${{ vars.SERVICE_NAME }}
+          migrate-job-name: ${{ vars.MIGRATE_JOB_NAME }}
+
+  deploy-prod:
+    if: github.event_name == 'release' && !github.event.release.prerelease
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: prod
+      url: ${{ steps.deploy.outputs.url }}
+    concurrency:
+      group: deploy-prod
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.DEPLOYER_SA }}
+
+      - uses: google-github-actions/setup-gcloud@v3
+
+      - id: image
+        run: echo "image=${IMAGE_REPOSITORY}:${GITHUB_SHA}" >>"$GITHUB_OUTPUT"
+
+      - name: Verify the release commit and image
+        env:
+          IMAGE: ${{ steps.image.outputs.image }}
+        run: deploy/scripts/verify-release.sh "$GITHUB_SHA" "$IMAGE"
+
+      - id: deploy
+        uses: ./.github/actions/deploy-env
+        with:
+          image: ${{ steps.image.outputs.image }}
+          workload-identity-provider: ${{ vars.WIF_PROVIDER }}
+          service-account: ${{ vars.DEPLOYER_SA }}
+          region: ${{ vars.GCP_REGION }}
+          service-name: ${{ vars.SERVICE_NAME }}
+          migrate-job-name: ${{ vars.MIGRATE_JOB_NAME }}

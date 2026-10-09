@@ -88,7 +88,7 @@ stages = ["commit-msg"]
 [[repos.hooks]]
 id = "jscpd"
 name = "jscpd (copy-paste duplication)"
-entry = "npx --yes jscpd@5 . --threshold 1 --ignore \"frontend/src/api/schema.ts\""
+entry = "npx --yes jscpd@5 . --threshold 1 --ignore \"frontend/src/api/schema.ts,docs/superpowers/**\""
 language = "system"
 pass_filenames = false
 priority = 2

@@ -1,0 +1,100 @@
+name: deploy-ci
+
+# PR gates for the Cloud Run deploy (docs/superpowers/specs/2026-10-07-cloud-run-deploy-design.md):
+# build the single image, run it against Postgres and exercise it end to end.
+
+on:
+  pull_request:
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - "deploy/**"
+      - "docker-compose.app.yml"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "tests/test_app_image.py"
+      - ".github/workflows/deploy-ci.yml"
+      - ".github/workflows/deploy.yml"
+      - ".github/actions/deploy-env/**"
+      - ".github/actions/setup-backend/**"
+      - "docs/deploy.md"
+      - "tests/test_deploy_config.py"
+      - "tests/test_deploy_scripts.py"
+
+concurrency:
+  group: deploy-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  UV_VERSION: "0.11.12"
+  APP_IMAGE_BASE_URL: "http://localhost:8080"
+  APP_IMAGE: "pomodoro-app:local"
+
+jobs:
+  app-image:
+    name: app-image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - &checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - &setup-backend
+        uses: ./.github/actions/setup-backend
+        with:
+          uv-version: ${{ env.UV_VERSION }}
+
+      - name: Build and start the single image
+        run: docker compose -f docker-compose.app.yml up -d --build --wait --wait-timeout 300
+
+      - name: Single-image tests
+        run: uv run pytest tests/test_app_image.py -v
+
+      - name: Smoke script against the image
+        run: deploy/scripts/smoke.sh "$APP_IMAGE_BASE_URL"
+
+      - name: Logs
+        if: failure()
+        run: docker compose -f docker-compose.app.yml logs
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f docker-compose.app.yml down -v
+
+  deploy-guards:
+    name: deploy-guards
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - *checkout
+      - *setup-backend
+      - name: Deploy guard tests
+        run: uv run pytest tests/test_deploy_config.py tests/test_deploy_scripts.py -q
+
+  terraform:
+    name: terraform
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: deploy/terraform
+    steps:
+      - *checkout
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: terraform fmt
+        run: terraform fmt -check -recursive
+
+      - name: terraform init (no backend)
+        run: terraform init -backend=false
+
+      - name: terraform validate
+        run: terraform validate

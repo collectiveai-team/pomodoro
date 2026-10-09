@@ -1,0 +1,52 @@
+# Rendered by deploy/entrypoint.sh: __PORT__ -> $PORT (Cloud Run injects 8080).
+# Runs as the image's non-root user, so every writable path lives under /tmp.
+worker_processes 1;
+pid /tmp/nginx.pid;
+error_log /dev/stderr warn;
+
+events {
+  worker_connections 512;
+}
+
+http {
+  access_log /dev/stdout;
+  server_tokens off;
+  client_max_body_size 1m;
+  client_body_temp_path /tmp/nginx/client_body;
+  proxy_temp_path /tmp/nginx/proxy;
+  fastcgi_temp_path /tmp/nginx/fastcgi;
+  uwsgi_temp_path /tmp/nginx/uwsgi;
+  scgi_temp_path /tmp/nginx/scgi;
+
+  # Cloud Run terminates TLS and sets X-Forwarded-Proto; keep it, or fall back to our own scheme locally.
+  map $http_x_forwarded_proto $forwarded_proto {
+    default $http_x_forwarded_proto;
+    "" $scheme;
+  }
+
+  proxy_http_version 1.1;
+  proxy_set_header Connection "";
+  proxy_set_header Host $host;
+  proxy_set_header X-Forwarded-Proto $forwarded_proto;
+  # Assumption: uvicorn trusts only 127.0.0.1 (us) and takes the right-most untrusted hop, which on
+  # Cloud Run should be the peer nginx saw, never an address the client wrote into the header.
+  # To be verified in QA (docs/deploy.md, "Verificación del rate limit en QA").
+  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+  server {
+    listen __PORT__;
+
+    # The backend's health route has no /api prefix (api/health.py).
+    location = /api/health {
+      proxy_pass http://127.0.0.1:8000/health;
+    }
+
+    location /api/ {
+      proxy_pass http://127.0.0.1:8000;
+    }
+
+    location / {
+      proxy_pass http://127.0.0.1:3000;
+    }
+  }
+}
