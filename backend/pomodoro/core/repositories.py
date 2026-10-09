@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
     from datetime import datetime
 
     from pomodoro.core.entities import AuthSession, AuthSessionId, Task, TaskId, User, UserId
@@ -108,6 +109,18 @@ class TaskRepository(Protocol):
 
     def update_text(self, user_id: UserId, task_id: TaskId, *, text: str) -> Task:
         """Persist `text` on `user_id`'s Task with `task_id`."""
+        ...
+
+    def set_positions(self, user_id: UserId, positions: Mapping[TaskId, int]) -> None:
+        """Atomically rewrite `position` on each of `user_id`'s Tasks in `positions` (T11)."""
+        ...
+
+    def archive(self, user_id: UserId, task_id: TaskId, *, archived_at: datetime) -> Task:
+        """Set `archived_at` on `user_id`'s Task with `task_id`, freezing its `position`."""
+        ...
+
+    def unarchive(self, user_id: UserId, task_id: TaskId, *, position: int) -> Task:
+        """Clear `archived_at` and set `position` on `user_id`'s Task with `task_id`."""
         ...
 
     def delete(self, user_id: UserId, task_id: TaskId) -> None:

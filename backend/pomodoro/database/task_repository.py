@@ -1,4 +1,4 @@
-"""SQLModel-backed `core.repositories.TaskRepository` (CES-18, T10).
+"""SQLModel-backed `core.repositories.TaskRepository` (CES-18, T10/T11).
 
 The only place a `tables.Task` row is mapped to a `core.entities.Task`
 dataclass: every method here returns the dataclass, never the row or a raw
@@ -90,20 +90,36 @@ class SqlTaskRepository:
         return _to_entity(row, tag_ids=tag_ids)
 
     def update_text(self, user_id: UserId, task_id: TaskId, *, text: str) -> Task:
-        row = self._get_row(user_id, task_id)
-        if row is None:
-            raise RuntimeError(f"Task {task_id} does not exist for user {user_id}.")
+        row = self._require_row(user_id, task_id)
         row.text = text
         row.text_key = task_text_key(text)
-        self._session.add(row)
         try:
-            self._session.commit()
+            return self._persist(row, task_id)
         except IntegrityError as exc:
-            self._session.rollback()
             raise DuplicateTaskTextError(text) from exc
-        self._session.refresh(row)
-        tag_ids = _tag_ids_by_task(self._session, [task_id]).get(task_id, frozenset())
-        return _to_entity(row, tag_ids=tag_ids)
+
+    def set_positions(self, user_id: UserId, positions: Mapping[TaskId, int]) -> None:
+        """Atomically rewrite several of `user_id`'s Tasks' positions (T11 reorder)."""
+        rows = self._session.exec(
+            select(tables.Task).where(
+                tables.Task.user_id == user_id, tables.Task.id.in_(list(positions))
+            )
+        ).all()
+        for row in rows:
+            row.position = positions[TaskId(require_id(row.id))]
+            self._session.add(row)
+        self._session.commit()
+
+    def archive(self, user_id: UserId, task_id: TaskId, *, archived_at: datetime) -> Task:
+        row = self._require_row(user_id, task_id)
+        row.archived_at = archived_at
+        return self._persist(row, task_id)
+
+    def unarchive(self, user_id: UserId, task_id: TaskId, *, position: int) -> Task:
+        row = self._require_row(user_id, task_id)
+        row.archived_at = None
+        row.position = position
+        return self._persist(row, task_id)
 
     def delete(self, user_id: UserId, task_id: TaskId) -> None:
         row = self._get_row(user_id, task_id)
@@ -129,3 +145,20 @@ class SqlTaskRepository:
         return self._session.exec(
             select(tables.Task).where(tables.Task.id == task_id, tables.Task.user_id == user_id)
         ).first()
+
+    def _require_row(self, user_id: UserId, task_id: TaskId) -> tables.Task:
+        row = self._get_row(user_id, task_id)
+        if row is None:
+            raise RuntimeError(f"Task {task_id} does not exist for user {user_id}.")
+        return row
+
+    def _persist(self, row: tables.Task, task_id: TaskId) -> Task:
+        self._session.add(row)
+        try:
+            self._session.commit()
+        except IntegrityError:
+            self._session.rollback()
+            raise
+        self._session.refresh(row)
+        tag_ids = _tag_ids_by_task(self._session, [task_id]).get(task_id, frozenset())
+        return _to_entity(row, tag_ids=tag_ids)

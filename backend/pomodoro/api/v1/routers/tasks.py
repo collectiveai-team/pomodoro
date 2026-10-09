@@ -1,10 +1,10 @@
-"""Tasks API: list, create, edit, delete, filter (T10).
+"""Tasks API: list, create, edit, delete, filter, reorder, archive (T10/T11).
 
 Thin handlers: validation and lifecycle rules delegate to `core.tasks`/
-`core.filtering`, and persistence delegates to the T10 `SqlTaskRepository`
+`core.filtering`, and persistence delegates to the T10/T11 `SqlTaskRepository`
 (CES-18), scoped to the authenticated User's `UserId` on every call so
-cross-User leakage is impossible by construction. Reorder/archive/unarchive
-(T11) and Tag assignment (T12) are out of this ticket's scope.
+cross-User leakage is impossible by construction. Tag assignment (T12) is out
+of this ticket's scope.
 """
 
 from __future__ import annotations
@@ -16,17 +16,24 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel import Session
 
 from pomodoro.api.v1 import dependencies as deps
-from pomodoro.api.v1.schemas.requests.tasks import CreateTaskRequest, EditTaskTextRequest
+from pomodoro.api.v1.schemas.requests.tasks import (
+    CreateTaskRequest,
+    EditTaskTextRequest,
+    ReorderTasksRequest,
+)
 from pomodoro.api.v1.schemas.responses.tasks import TaskListResponse, TaskResponse
 from pomodoro.api.v1.session import require_json_content_type
 from pomodoro.core.entities import TagId, TaskId
 from pomodoro.core.filtering import NO_TAG, filter_tasks
 from pomodoro.core.tasks import (
+    archive_task,
     create_task,
     edit_task_text,
     ensure_task_deletable,
     order_active_tasks,
     order_archived_tasks,
+    reorder_active_tasks_for_user,
+    unarchive_task,
 )
 from pomodoro.database.task_repository import SqlTaskRepository
 
@@ -148,3 +155,59 @@ def delete(
     has_pomodoro = repo.has_pomodoro(auth_session.user_id, TaskId(task_id))
     ensure_task_deletable(task, has_pomodoros=has_pomodoro)
     repo.delete(auth_session.user_id, TaskId(task_id))
+
+
+@router.post("/reorder")
+def reorder(
+    payload: ReorderTasksRequest,
+    auth_session: AuthSession = Depends(deps.require_session),
+    db_session: Session = Depends(deps.get_db_session),
+) -> list[TaskResponse]:
+    """Rewrite the User's Active Tasks' positions to match the given complete id order."""
+    repo = SqlTaskRepository(db_session)
+    active = order_active_tasks(repo.list_for_user(auth_session.user_id))
+    ordered_ids = [TaskId(task_id) for task_id in payload.task_ids]
+    reordered = reorder_active_tasks_for_user(active, ordered_ids)
+    repo.set_positions(auth_session.user_id, {task.id: task.position for task in reordered})
+
+    has_pomodoro_ids = repo.task_ids_with_pomodoros(auth_session.user_id)
+    return [
+        _to_response(task, deletable=task.id not in has_pomodoro_ids)
+        for task in order_active_tasks(reordered)
+    ]
+
+
+@router.post("/{task_id}/archive")
+def archive(
+    task_id: int,
+    auth_session: AuthSession = Depends(deps.require_session),
+    db_session: Session = Depends(deps.get_db_session),
+) -> TaskResponse:
+    """Archive a Task, freezing its `position` and setting `archived_at`."""
+    repo = SqlTaskRepository(db_session)
+    task = repo.get(auth_session.user_id, TaskId(task_id))
+    if task is None:
+        raise _not_found()
+    now = datetime.now(UTC)
+    archive_task(task, archived_at=now)
+    updated = repo.archive(auth_session.user_id, TaskId(task_id), archived_at=now)
+    deletable = not repo.has_pomodoro(auth_session.user_id, TaskId(task_id))
+    return _to_response(updated, deletable=deletable)
+
+
+@router.post("/{task_id}/unarchive")
+def unarchive(
+    task_id: int,
+    auth_session: AuthSession = Depends(deps.require_session),
+    db_session: Session = Depends(deps.get_db_session),
+) -> TaskResponse:
+    """Unarchive a Task to the end of the Active list, rejecting a text collision."""
+    repo = SqlTaskRepository(db_session)
+    task = repo.get(auth_session.user_id, TaskId(task_id))
+    if task is None:
+        raise _not_found()
+    tasks = repo.list_for_user(auth_session.user_id)
+    validated = unarchive_task(tasks, task)
+    updated = repo.unarchive(auth_session.user_id, TaskId(task_id), position=validated.position)
+    deletable = not repo.has_pomodoro(auth_session.user_id, TaskId(task_id))
+    return _to_response(updated, deletable=deletable)

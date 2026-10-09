@@ -53,6 +53,15 @@ class TaskUnarchiveCollisionError(DomainError):
         self.text = text
 
 
+class TaskReorderInvalidError(DomainError):
+    """Raised when a reorder request's ids aren't exactly the User's Active Task ids."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "Reorder must include exactly the User's current Active Task ids, each once."
+        )
+
+
 class TaskHasPomodorosError(DomainError):
     """Raised when permanently deleting a Task that has at least one Pomodoro."""
 

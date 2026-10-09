@@ -1,4 +1,4 @@
-"""Task lifecycle rules (core, T4): create, edit, archive, unarchive, reorder, delete.
+"""Task lifecycle rules (core, T4/T11): create, edit, archive, unarchive, reorder, delete.
 
 Pure functions over `Task` snapshots scoped to a single `User` — `core` never
 queries a database, so callers pass in the relevant `Task`s (and, for deletion,
@@ -16,6 +16,7 @@ from pomodoro.core.entities import Task
 from pomodoro.core.errors import (
     DuplicateTaskTextError,
     TaskHasPomodorosError,
+    TaskReorderInvalidError,
     TaskTextEmptyError,
     TaskTextTooLongError,
     TaskUnarchiveCollisionError,
@@ -119,6 +120,22 @@ def reorder_active_tasks(active_tasks: Sequence[Task], ordered_ids: Sequence[Tas
     return [
         replace(tasks_by_id[task_id], position=index) for index, task_id in enumerate(ordered_ids)
     ]
+
+
+def reorder_active_tasks_for_user(
+    active_tasks: Sequence[Task], ordered_ids: Sequence[TaskId]
+) -> list[Task]:
+    """Reorder from a User-supplied id list, rejecting rather than partially applying it.
+
+    `reorder_active_tasks` treats a mismatched id set as a caller-contract
+    violation (`ValueError`); this wraps it with the User-facing validation
+    (api/T11) that reports a clear `TaskReorderInvalidError` instead, covering a
+    list that adds, drops, or repeats an id.
+    """
+    has_duplicates = len(ordered_ids) != len(set(ordered_ids))
+    if has_duplicates or set(ordered_ids) != {task.id for task in active_tasks}:
+        raise TaskReorderInvalidError
+    return reorder_active_tasks(active_tasks, ordered_ids)
 
 
 def ensure_task_deletable(task: Task, *, has_pomodoros: bool) -> None:

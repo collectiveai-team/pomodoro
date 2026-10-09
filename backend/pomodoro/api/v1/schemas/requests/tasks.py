@@ -25,3 +25,17 @@ class EditTaskTextRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     text: str
+
+
+class ReorderTasksRequest(BaseModel):
+    """POST /api/v1/tasks/reorder payload (T11).
+
+    `task_ids` must be exactly the complete, permuted set of the User's current
+    Active Task ids - a list that adds, drops, or repeats an id is rejected by
+    `core.tasks.reorder_active_tasks_for_user` with a domain error rather than
+    silently applied in part.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    task_ids: list[int]
