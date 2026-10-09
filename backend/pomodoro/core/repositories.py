@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Protocol
 if TYPE_CHECKING:
     from datetime import datetime
 
-    from pomodoro.core.entities import AuthSession, AuthSessionId, User, UserId
+    from pomodoro.core.entities import AuthSession, AuthSessionId, Task, TaskId, User, UserId
 
 
 class UserRepository(Protocol):
@@ -83,4 +83,41 @@ class AuthSessionRepository(Protocol):
         self, user_id: UserId, *, keep_session_id: AuthSessionId
     ) -> None:
         """Revoke every AuthSession belonging to `user_id` except `keep_session_id`."""
+        ...
+
+
+class TaskRepository(Protocol):
+    """Persistence port for `Task` (`database.task_repository.SqlTaskRepository`, T10).
+
+    Every method takes the owning `UserId` explicitly and the implementation
+    filters by it at the SQL level, so a caller can never reach another User's
+    Task even by mistake (cross-User leakage is impossible by construction).
+    """
+
+    def add(self, *, user_id: UserId, text: str, position: int, created_at: datetime) -> Task:
+        """Create a new Task, raising `DuplicateTaskTextError` on an Active-text collision."""
+        ...
+
+    def list_for_user(self, user_id: UserId) -> list[Task]:
+        """Return every Task (Active and Archived) belonging to `user_id`."""
+        ...
+
+    def get(self, user_id: UserId, task_id: TaskId) -> Task | None:
+        """Return `user_id`'s Task with `task_id`, or `None` if it doesn't exist for them."""
+        ...
+
+    def update_text(self, user_id: UserId, task_id: TaskId, *, text: str) -> Task:
+        """Persist `text` on `user_id`'s Task with `task_id`."""
+        ...
+
+    def delete(self, user_id: UserId, task_id: TaskId) -> None:
+        """Permanently delete `user_id`'s Task with `task_id`, if it exists."""
+        ...
+
+    def has_pomodoro(self, user_id: UserId, task_id: TaskId) -> bool:
+        """Return whether `user_id`'s Task with `task_id` has any recorded Pomodoro."""
+        ...
+
+    def task_ids_with_pomodoros(self, user_id: UserId) -> frozenset[TaskId]:
+        """Return the ids of `user_id`'s Tasks that have at least one recorded Pomodoro."""
         ...
