@@ -15,14 +15,16 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from datetime import timedelta
 from typing import TYPE_CHECKING
+from zoneinfo import ZoneInfo
 
 from pomodoro.core.entities import BreakKind, PomodoroStatus, Timer, TimerPhase
 from pomodoro.core.errors import TimerActionNotAllowedError
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from datetime import datetime
 
-    from pomodoro.core.entities import TaskId
+    from pomodoro.core.entities import Pomodoro, TaskId
 
 POMODORO_SECONDS = 1500
 BREAK_SHORT_SECONDS = 300
@@ -75,6 +77,22 @@ def _elapsed_active_seconds(timer: Timer, now: datetime) -> int:
 
 def _freeze_accumulated(timer: Timer, now: datetime) -> int:
     return timer.accumulated_active_seconds + _elapsed_active_seconds(timer, now)
+
+
+def _phase_total_seconds(timer: Timer) -> int | None:
+    if timer.phase in (TimerPhase.POMODORO_RUNNING, TimerPhase.POMODORO_PAUSED):
+        return POMODORO_SECONDS
+    if timer.phase in (TimerPhase.BREAK_RUNNING, TimerPhase.BREAK_PAUSED):
+        return BREAK_LONG_SECONDS if timer.break_kind is BreakKind.LONG else BREAK_SHORT_SECONDS
+    return None
+
+
+def remaining_seconds(timer: Timer, *, now: datetime) -> int | None:
+    """Seconds left in the current phase, or `None` for a phase with no duration (api, T13)."""
+    total = _phase_total_seconds(timer)
+    if total is None:
+        return None
+    return max(total - _freeze_accumulated(timer, now), 0)
 
 
 def settle(timer: Timer, now: datetime) -> TimerUpdate:
@@ -219,3 +237,29 @@ def next_pomodoro(timer: Timer, *, now: datetime) -> Timer:
         running_since=now,
         phase_ended_at=None,
     )
+
+
+@dataclass(frozen=True, slots=True)
+class DaySummary:
+    """The day summary (api, T13): completed-today count, and the Break cadence countdown."""
+
+    completed_today: int
+    remaining_to_long_break: int
+
+
+def day_summary(completed: Sequence[Pomodoro], *, time_zone: str, now: datetime) -> DaySummary:
+    """Count completed-today in `time_zone` (never UTC) and derive the Break countdown.
+
+    `completed` is every completed Pomodoro the caller has for the User (api, T13) -
+    its length is the all-time total `derive_break_kind` keys off, never a stored
+    counter (issue #12 spec).
+    """
+    zone = ZoneInfo(time_zone)
+    today = now.astimezone(zone).date()
+    completed_today = sum(
+        1 for pomodoro in completed if pomodoro.ended_at.astimezone(zone).date() == today
+    )
+    total = len(completed)
+    remainder = total % LONG_BREAK_EVERY
+    remaining = LONG_BREAK_EVERY - remainder if remainder else LONG_BREAK_EVERY
+    return DaySummary(completed_today=completed_today, remaining_to_long_break=remaining)

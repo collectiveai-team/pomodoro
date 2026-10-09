@@ -11,19 +11,22 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Callable, Mapping
     from datetime import datetime
 
     from pomodoro.core.entities import (
         AuthSession,
         AuthSessionId,
+        Pomodoro,
         Tag,
         TagId,
         Task,
         TaskId,
+        Timer,
         User,
         UserId,
     )
+    from pomodoro.core.timer import TimerUpdate
 
 
 class UserRepository(Protocol):
@@ -167,4 +170,30 @@ class TagRepository(Protocol):
 
     def delete(self, user_id: UserId, tag_id: TagId) -> None:
         """Permanently delete `user_id`'s Tag with `tag_id`; cascades via `task_tags` FKs."""
+        ...
+
+
+class TimerRepository(Protocol):
+    """Persistence port for the User's single `Timer` row (`database.timer_repository`, T13).
+
+    `apply` is the only mutation entrypoint: it reads `user_id`'s Timer row
+    (creating an Idle one lazily on first touch), runs `mutate` against the
+    dataclass snapshot, and persists the result via an optimistic version CAS.
+    If a concurrent writer already advanced the row first, the conditional
+    write affects no rows and `apply` retries `mutate` against a freshly
+    re-read Timer rather than silently overwriting the other writer's commit -
+    so two simultaneous requests racing the same expired Pomodoro deadline can
+    never both persist a completed-Pomodoro row for the same run.
+    """
+
+    def apply(self, user_id: UserId, mutate: Callable[[Timer], TimerUpdate]) -> TimerUpdate:
+        """Atomically read-mutate-write `user_id`'s Timer; see class docstring."""
+        ...
+
+
+class PomodoroRepository(Protocol):
+    """Persistence port for finished `Pomodoro` runs (`database.pomodoro_repository`, T13)."""
+
+    def list_completed(self, user_id: UserId) -> list[Pomodoro]:
+        """Return every completed Pomodoro for `user_id` (day summary, Break cadence)."""
         ...

@@ -8,17 +8,28 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from pomodoro.core.entities import BreakKind, PomodoroStatus, TaskId, Timer, TimerPhase, UserId
+from pomodoro.core.entities import (
+    BreakKind,
+    Pomodoro,
+    PomodoroId,
+    PomodoroStatus,
+    TaskId,
+    Timer,
+    TimerPhase,
+    UserId,
+)
 from pomodoro.core.errors import TimerActionNotAllowedError
 from pomodoro.core.timer import (
     BREAK_LONG_SECONDS,
     BREAK_SHORT_SECONDS,
     POMODORO_SECONDS,
+    day_summary,
     derive_break_kind,
     discard,
     log,
     next_pomodoro,
     pause,
+    remaining_seconds,
     resume,
     settle,
     skip_break,
@@ -343,3 +354,93 @@ class TestInvalidActionsRaiseWithTheCurrentTimer:
             pause(timer, now=_EPOCH)
         assert excinfo.value.action == "pause"
         assert excinfo.value.timer is timer
+
+
+class TestRemainingSeconds:
+    def test_counts_down_while_a_pomodoro_is_running(self) -> None:
+        clock = FakeClock(_EPOCH)
+        timer = start(_idle_timer(), task_id=_TASK, now=clock.now())
+        clock.advance(600)
+        assert remaining_seconds(timer, now=clock.now()) == POMODORO_SECONDS - 600
+
+    def test_is_frozen_while_paused(self) -> None:
+        clock = FakeClock(_EPOCH)
+        timer = start(_idle_timer(), task_id=_TASK, now=clock.now())
+        clock.advance(600)
+        paused = pause(timer, now=clock.now())
+        clock.advance(300)  # time passes while paused; must not count
+        assert remaining_seconds(paused, now=clock.now()) == POMODORO_SECONDS - 600
+
+    def test_accounts_for_the_breaks_own_shorter_or_longer_duration(self) -> None:
+        clock = FakeClock(_EPOCH)
+        short = start_break(_ready_for_next(), now=clock.now(), total_completed_pomodoros=1)
+        long_ = start_break(_ready_for_next(), now=clock.now(), total_completed_pomodoros=5)
+        assert remaining_seconds(short, now=clock.now()) == BREAK_SHORT_SECONDS
+        assert remaining_seconds(long_, now=clock.now()) == BREAK_LONG_SECONDS
+
+    @pytest.mark.parametrize(
+        "phase",
+        [TimerPhase.IDLE, TimerPhase.ASKING_TO_LOG, TimerPhase.READY_FOR_NEXT],
+    )
+    def test_is_none_for_a_phase_with_no_duration(self, phase: TimerPhase) -> None:
+        assert remaining_seconds(Timer(user_id=_USER, phase=phase), now=_EPOCH) is None
+
+    def test_never_goes_negative_once_a_phase_has_already_expired(self) -> None:
+        clock = FakeClock(_EPOCH)
+        timer = start(_idle_timer(), task_id=_TASK, now=clock.now())
+        clock.advance(POMODORO_SECONDS + 999)
+        assert remaining_seconds(timer, now=clock.now()) == 0
+
+
+def _completed_pomodoro(pomodoro_id: int, *, ended_at: datetime) -> Pomodoro:
+    return Pomodoro(
+        id=PomodoroId(pomodoro_id),
+        user_id=_USER,
+        task_id=_TASK,
+        started_at=ended_at - timedelta(seconds=POMODORO_SECONDS),
+        ended_at=ended_at,
+        duration_seconds=POMODORO_SECONDS,
+        status=PomodoroStatus.COMPLETED,
+    )
+
+
+class TestDaySummary:
+    def test_completed_today_is_computed_in_the_users_time_zone_not_utc(self) -> None:
+        # Bogota is UTC-5. At 2026-01-02T02:00 UTC it is still 2026-01-01T21:00
+        # locally - Bogota's "today" is 2026-01-01, even though the UTC calendar date
+        # has already rolled to 2026-01-02. A Pomodoro ending later the same UTC day
+        # (2026-01-02T10:00 UTC = 2026-01-02T05:00 Bogota) falls on a *different*
+        # Bogota day: a naive UTC-date comparison would wrongly count it as "today".
+        now = datetime(2026, 1, 2, 2, 0, tzinfo=UTC)
+        pomodoro = _completed_pomodoro(1, ended_at=datetime(2026, 1, 2, 10, 0, tzinfo=UTC))
+
+        summary = day_summary([pomodoro], time_zone="America/Bogota", now=now)
+
+        assert summary.completed_today == 0
+
+    def test_completed_today_counts_a_pomodoro_that_ended_earlier_the_same_local_day(self) -> None:
+        now = datetime(2026, 1, 2, 2, 0, tzinfo=UTC)  # 2026-01-01T21:00 in Bogota
+        pomodoro = _completed_pomodoro(1, ended_at=now - timedelta(hours=1))  # still 2026-01-01
+
+        summary = day_summary([pomodoro], time_zone="America/Bogota", now=now)
+
+        assert summary.completed_today == 1
+
+    def test_remaining_to_long_break_counts_down_from_the_lifetime_total(self) -> None:
+        completed = [_completed_pomodoro(i, ended_at=_EPOCH) for i in range(3)]
+
+        summary = day_summary(completed, time_zone="UTC", now=_EPOCH)
+
+        assert summary.remaining_to_long_break == 2
+
+    def test_remaining_to_long_break_is_a_full_five_right_after_a_long_break(self) -> None:
+        completed = [_completed_pomodoro(i, ended_at=_EPOCH) for i in range(5)]
+
+        summary = day_summary(completed, time_zone="UTC", now=_EPOCH)
+
+        assert summary.remaining_to_long_break == 5
+
+    def test_remaining_to_long_break_is_five_with_no_completed_pomodoros_yet(self) -> None:
+        summary = day_summary([], time_zone="UTC", now=_EPOCH)
+
+        assert summary.remaining_to_long_break == 5

@@ -181,3 +181,9 @@ class Timer(SQLModel, table=True):
     phase_ended_at: datetime | None = Field(
         default=None, sa_column=sa.Column(sa.DateTime(timezone=True), nullable=True)
     )
+    # Optimistic-concurrency CAS (T13): `SqlTimerRepository.apply` only writes via
+    # `UPDATE ... WHERE version = <version just read>`, so two simultaneous requests
+    # racing the same expired Pomodoro deadline can never both persist a
+    # completed-Pomodoro row for the same run - the loser's conditional write affects
+    # zero rows and retries against the fresh, already-settled row instead.
+    version: int = Field(default=0)

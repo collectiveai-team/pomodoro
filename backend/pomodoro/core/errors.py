@@ -131,3 +131,11 @@ class TimerActionNotAllowedError(DomainError):
         super().__init__(f"Cannot {action!r} while the Timer is in phase {timer.phase.value!r}.")
         self.action = action
         self.timer = timer
+
+
+class TaskNotActiveError(DomainError):
+    """Raised when starting a Pomodoro against a Task that isn't one of the User's Active Tasks."""
+
+    def __init__(self, task_id: TaskId) -> None:
+        super().__init__(f"Task {task_id} is not one of the User's Active Tasks.")
+        self.task_id = task_id
