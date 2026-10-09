@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pomodoro.core.entities import TaskId
+    from pomodoro.core.entities import TaskId, Timer
 
 
 class DomainError(Exception):
@@ -77,3 +77,12 @@ class TagRenameCollisionError(DomainError):
     def __init__(self, name: str) -> None:
         super().__init__(f"A Tag named {name!r} already exists.")
         self.name = name
+
+
+class TimerActionNotAllowedError(DomainError):
+    """Raised when a Timer action doesn't match its current phase; `api` maps this to 409."""
+
+    def __init__(self, action: str, timer: Timer) -> None:
+        super().__init__(f"Cannot {action!r} while the Timer is in phase {timer.phase.value!r}.")
+        self.action = action
+        self.timer = timer
