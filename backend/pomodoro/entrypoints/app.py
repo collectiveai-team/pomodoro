@@ -7,9 +7,11 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.exceptions import StarletteHTTPException as HTTPException
 from fastapi.responses import JSONResponse
 
+from pomodoro.api.v1.auth.routers import router as auth_router
 from pomodoro.api.v1.routers.health import router as health_router
 from pomodoro.api.v1.schemas.responses.error import ErrorResponse
 from pomodoro.core.logger import get_logger
+from pomodoro.core.users import DuplicateEmailError, InvalidEmailError, InvalidPasswordLengthError
 from pomodoro.settings import get_settings
 
 log = get_logger(__name__)
@@ -33,6 +35,23 @@ def _register_exception_handlers(app: FastAPI) -> None:
         log.info("http_exception", path=request.url.path, status_code=exc.status_code)
         return _error_response(exc.status_code, str(exc.detail), "http_error")
 
+    @app.exception_handler(InvalidEmailError)
+    async def _handle_invalid_email(request: Request, exc: InvalidEmailError) -> JSONResponse:
+        log.info("invalid_email", path=request.url.path)
+        return _error_response(422, str(exc), "invalid_email")
+
+    @app.exception_handler(DuplicateEmailError)
+    async def _handle_duplicate_email(request: Request, exc: DuplicateEmailError) -> JSONResponse:
+        log.info("duplicate_email", path=request.url.path)
+        return _error_response(422, str(exc), "duplicate_email")
+
+    @app.exception_handler(InvalidPasswordLengthError)
+    async def _handle_invalid_password_length(
+        request: Request, exc: InvalidPasswordLengthError
+    ) -> JSONResponse:
+        log.info("invalid_password_length", path=request.url.path)
+        return _error_response(422, str(exc), "invalid_password_length")
+
     @app.exception_handler(Exception)
     async def _handle_unexpected_error(request: Request, exc: Exception) -> JSONResponse:
         log.error("unhandled_exception", path=request.url.path, exc_info=exc)
@@ -46,6 +65,7 @@ def create_app() -> FastAPI:
 
     _register_exception_handlers(app)
     app.include_router(health_router, prefix="/api")
+    app.include_router(auth_router, prefix="/api/v1")
 
     return app
 

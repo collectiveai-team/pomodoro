@@ -87,7 +87,8 @@ max-complexity = 10
 ban-relative-imports = "all"
 
 [tool.ruff.lint.per-file-ignores]
-"backend/tests/**" = ["S101", "INP001", "S603", "S607"]
+# S106: tests legitimately pass literal password strings as fixture data, never real secrets.
+"backend/tests/**" = ["S101", "INP001", "S603", "S607", "S106"]
 # backend/alembic is driven by the `alembic` CLI as standalone scripts (env.py, each revision
 # module), never imported as a package, so it carries no __init__.py (CES-18, ADR-0002).
 "backend/alembic/**" = ["INP001"]
@@ -95,17 +96,31 @@ ban-relative-imports = "all"
 # os.getenv line and the cached-config `global` are the house snippet's own design, not ours to
 # edit.
 "backend/pomodoro/core/logger.py" = ["E501", "PLW0603"]
+# FastAPI resolves every dependency callable's signature via `typing.get_type_hints` when the
+# app is built, including chained `Depends(...)`-typed parameters and return types. With
+# `from __future__ import annotations`, every name in those annotations must stay a real
+# top-level import — flake8-type-checking's suggestion to hide them behind `TYPE_CHECKING`
+# raises `NameError` at startup, since `core`'s repository Protocols live in a different module
+# than their `database` providers and can't be exempted by TC's same-import-statement heuristic
+# (see api/v1/routers/health.py, which dodges this only because `Clock`/`DbSession` happen to
+# share an import line with their runtime-used provider function).
+"backend/pomodoro/api/**/routers.py" = ["TC001", "TC002", "TC003"]
+"backend/pomodoro/database/repositories/**" = ["TC001", "TC002", "TC003"]
 
 # FastAPI's dependency-injection idiom is `param: T = Depends(...)` — calling Depends() in an
 # argument default is the documented pattern, not the footgun B008 otherwise guards against.
 [tool.ruff.lint.flake8-bugbear]
 extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Path", "fastapi.Header", "fastapi.Body"]
 
-# Pydantic (and pydantic-settings) resolve field annotations at class-creation time, so types
-# used only in a BaseModel/BaseSettings subclass's fields must stay real imports, never moved
-# into a `TYPE_CHECKING` block.
+# Pydantic, pydantic-settings, and SQLModel all resolve field annotations at class-creation
+# time, so types used only in one of these base classes' fields must stay real imports, never
+# moved into a `TYPE_CHECKING` block.
 [tool.ruff.lint.flake8-type-checking]
-runtime-evaluated-base-classes = ["pydantic.BaseModel", "pydantic_settings.BaseSettings"]
+runtime-evaluated-base-classes = [
+  "pydantic.BaseModel",
+  "pydantic_settings.BaseSettings",
+  "sqlmodel.SQLModel",
+]
 
 # MARK: Pyrefly
 [tool.pyrefly]
@@ -178,8 +193,10 @@ requires-python = ">=3.14"
 # MARK: Dependencies
 dependencies = [
   "alembic>=1.20.0",
+  "email-validator>=2.2.0",
   "fastapi>=0.115",
   "psycopg[binary]>=3.3.6",
+  "pwdlib[argon2]>=0.2.1",
   "pydantic>=2.9",
   "pydantic-settings>=2.6",
   "sqlalchemy>=2.1.4",

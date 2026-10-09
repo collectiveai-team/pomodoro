@@ -19,6 +19,7 @@ from pomodoro.settings import get_settings
 
 if TYPE_CHECKING:
     from sqlalchemy.engine import URL
+    from sqlalchemy.pool import Pool
 
 _SQLITE_DRIVERNAME_PREFIX = "sqlite"
 
@@ -35,14 +36,30 @@ def _ensure_sqlite_file_directory_exists(url: URL) -> None:
         Path(database).parent.mkdir(parents=True, exist_ok=True)
 
 
-def build_engine(database_url: str | None = None) -> Engine:
-    """Build a SQLAlchemy engine for `database_url` (default: the settings module's)."""
+def build_engine(
+    database_url: str | None = None,
+    *,
+    poolclass: type[Pool] | None = None,
+    connect_args: dict[str, Any] | None = None,
+) -> Engine:
+    """Build a SQLAlchemy engine for `database_url` (default: the settings module's).
+
+    `poolclass`/`connect_args` are forwarded to `create_engine` as-is; tests use them to pin a
+    `sqlite://` in-memory engine to a single shared connection (`StaticPool`,
+    `check_same_thread=False`) so every request in a test sees the same ephemeral database.
+    """
     url = make_url(database_url if database_url is not None else get_settings().database_url)
     is_sqlite = url.drivername.startswith(_SQLITE_DRIVERNAME_PREFIX)
     if is_sqlite:
         _ensure_sqlite_file_directory_exists(url)
 
-    engine = create_engine(url)
+    kwargs: dict[str, Any] = {}
+    if poolclass is not None:
+        kwargs["poolclass"] = poolclass
+    if connect_args is not None:
+        kwargs["connect_args"] = connect_args
+
+    engine = create_engine(url, **kwargs)
     if is_sqlite:
         event.listen(engine, "connect", _enable_sqlite_foreign_keys)
     return engine

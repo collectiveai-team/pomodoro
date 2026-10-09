@@ -9,6 +9,7 @@ from __future__ import annotations
 from logging.config import fileConfig
 
 from alembic import context
+from pomodoro.database import models  # noqa: F401 — registers every table on SQLModel.metadata
 from pomodoro.database.engine import build_engine
 from pomodoro.settings import get_settings
 from sqlmodel import SQLModel
