@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 from pomodoro.api.v1.routers.health import router as health_router
 from pomodoro.api.v1.schemas.responses.error import ErrorResponse
 from pomodoro.core.logger import get_logger
-from pomodoro.entrypoints.settings import get_settings
+from pomodoro.settings import get_settings
 
 log = get_logger(__name__)
 

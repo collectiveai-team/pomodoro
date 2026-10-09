@@ -88,6 +88,9 @@ ban-relative-imports = "all"
 
 [tool.ruff.lint.per-file-ignores]
 "backend/tests/**" = ["S101", "INP001", "S603", "S607"]
+# backend/alembic is driven by the `alembic` CLI as standalone scripts (env.py, each revision
+# module), never imported as a package, so it carries no __init__.py (CES-18, ADR-0002).
+"backend/alembic/**" = ["INP001"]
 # CES-74 (core-logger): shipped verbatim from .agents/snippets/core/logger.py; its bootstrap
 # os.getenv line and the cached-config `global` are the house snippet's own design, not ours to
 # edit.
@@ -174,9 +177,13 @@ requires-python = ">=3.14"
 
 # MARK: Dependencies
 dependencies = [
+  "alembic>=1.20.0",
   "fastapi>=0.115",
+  "psycopg[binary]>=3.3.6",
   "pydantic>=2.9",
   "pydantic-settings>=2.6",
+  "sqlalchemy>=2.1.4",
+  "sqlmodel>=0.0.48",
   "structlog>=24.4",
 ]
 
@@ -211,4 +218,6 @@ known_first_party = ["pomodoro"]
 [tool.deptry.per_rule_ignores]
 # import-linter ships the `lint-imports` console script, never imported by name.
 # httpx is TestClient's runtime dependency, never imported directly in our code.
-DEP002 = ["import-linter", "httpx"]
+# psycopg (ADR-0002's PostgreSQL driver) is loaded dynamically by SQLAlchemy's dialect system
+# (the `postgresql+psycopg://` URL scheme), never imported by name in our code.
+DEP002 = ["import-linter", "httpx", "psycopg"]
