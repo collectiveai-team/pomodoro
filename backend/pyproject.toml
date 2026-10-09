@@ -14,13 +14,19 @@ extend = "../pyproject.toml"
 [tool.ruff.lint.per-file-ignores]
 # The inherited root config's "tests/**" entry is defined relative to *its own*
 # directory, so it does not reach this project's nested tests/ — repeated here.
-"tests/**" = ["S101", "INP001", "S603", "S607"]
+# S106 (possible hardcoded password): fixture hashes/tokens here are deliberate test
+# literals, never real secrets.
+"tests/**" = ["S101", "INP001", "S603", "S607", "S106"]
 # FastAPI resolves dependencies by parameter default (`Depends(...)`), which ruff's
 # flake8-bugbear otherwise flags as a mutable/call-in-default-argument hazard.
 "pomodoro/api/**" = ["B008"]
 # CES-74 house logger drop-in: the documented lazy-configure-once pattern needs a
 # module-level flag flipped from inside `_configure()`.
 "pomodoro/core/logger.py" = ["PLW0603"]
+# SQLModel resolves field annotations at class-definition time (it is a pydantic model,
+# not a lazily-evaluated dataclass), so `datetime` must stay a real top-level import here,
+# never moved behind `TYPE_CHECKING` the way flake8-type-checking otherwise prefers.
+"pomodoro/database/tables.py" = ["TC003"]
 
 # MARK: Pyrefly
 [tool.pyrefly]
@@ -46,6 +52,12 @@ layers = [
   "pomodoro.api",
   "pomodoro.database",
   "pomodoro.core",
+]
+# alembic/env.py is invoked standalone by the `alembic` CLI, never imported by the
+# running app, so it reuses the single CES-76 settings module (get_settings()) for
+# DATABASE_URL instead of duplicating env-var parsing — see its module docstring.
+ignore_imports = [
+  "pomodoro.database.migrations.env -> pomodoro.entrypoints.settings",
 ]
 
 # CES-17 api-boundary layout: the api package is the only inbound HTTP boundary; nothing
@@ -82,11 +94,24 @@ requires-python = ">=3.14"
 
 # MARK: Dependencies
 dependencies = [
+  "alembic>=1.13.0",
   "fastapi>=0.115.0",
   "pydantic>=2.9.0",
   "pydantic-settings>=2.6.0",
+  # Promoted out of the dev group (T2): `database/engine.py`, `database/tables.py` and the
+  # Alembic migrations now import it directly at runtime (FK pragma event listener, Column/
+  # Index/CheckConstraint construction), not just under TYPE_CHECKING.
+  "sqlalchemy>=2.0.35",
   "sqlmodel>=0.0.22",
   "structlog>=24.4.0",
+  # PostgreSQL DBAPI driver for `postgresql://` DATABASE_URLs in production (ADR-0002);
+  # SQLAlchemy's postgresql dialect imports it directly, so it must be a real runtime
+  # dependency, not a dev/test-only one. [binary] ships prebuilt wheels so prod images
+  # don't need a C toolchain.
+  "psycopg[binary]>=3.2.0",
+  # Never imported directly; zoneinfo (used by the History day-grouping rule, T16)
+  # needs it to resolve IANA zones on trimmed base images with no system tzdata.
+  "tzdata>=2024.1",
 ]
 
 # MARK: Extra deps
@@ -101,7 +126,13 @@ dev = [
   "ruff>=0.7.0",
   "httpx>=0.27.0",
   "import-linter>=2.1",
-  # Only used for `sqlalchemy.engine.Engine` in TYPE_CHECKING-gated type hints; sqlmodel
-  # pulls it in as a runtime transitive dependency already.
-  "sqlalchemy>=2.0.35",
 ]
+
+# MARK: deptry (CES-109)
+[tool.deptry.per_rule_ignores]
+# tzdata is a runtime necessity for zoneinfo, never imported directly — deptry can only
+# ever see it as declared-but-unused (DEP002). psycopg is likewise never imported by our
+# code directly: SQLAlchemy's postgresql dialect imports it internally when a
+# `postgresql://` URL is used (see database/engine.py), so deptry can only ever see it as
+# declared-but-unused too.
+DEP002 = ["tzdata", "psycopg"]
