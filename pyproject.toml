@@ -104,6 +104,10 @@ project-excludes = [
   ".tmp/**",
   ".scratch/**",
   ".journals/**",
+  # backend/ is its own self-contained uv project (own pyproject.toml, lockfile, venv);
+  # type-check it from there (`cd backend && uvx pyrefly check`), not against this
+  # project's dependency graph.
+  "backend/**",
 ]
 use-ignore-files = false
 disable-project-excludes-heuristics = true
@@ -177,6 +181,8 @@ dev = [
 
 # MARK: deptry
 # .agents/snippets/ are botica drop-in templates (they import pydantic/structlog before the app
-# adopts them); .worktrees/.orquestalite are local checkouts and agent run state.
+# adopts them); .worktrees/.orquestalite are local checkouts and agent run state. backend/ is
+# its own self-contained uv project with its own dependency graph — run deptry there instead
+# (`cd backend && uvx deptry .`).
 [tool.deptry]
-extend_exclude = [".agents", ".claude", ".worktrees", ".orquestalite"]
+extend_exclude = [".agents", ".claude", ".worktrees", ".orquestalite", "backend"]

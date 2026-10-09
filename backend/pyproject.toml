@@ -1,0 +1,107 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["pomodoro"]
+
+# MARK: Ruff
+# Inherits line-length, lint.select, docstring/mccabe/import settings from the root
+# project's pyproject.toml (one lint stack, CES-58) instead of duplicating them here.
+[tool.ruff]
+extend = "../pyproject.toml"
+
+[tool.ruff.lint.per-file-ignores]
+# The inherited root config's "tests/**" entry is defined relative to *its own*
+# directory, so it does not reach this project's nested tests/ — repeated here.
+"tests/**" = ["S101", "INP001", "S603", "S607"]
+# FastAPI resolves dependencies by parameter default (`Depends(...)`), which ruff's
+# flake8-bugbear otherwise flags as a mutable/call-in-default-argument hazard.
+"pomodoro/api/**" = ["B008"]
+# CES-74 house logger drop-in: the documented lazy-configure-once pattern needs a
+# module-level flag flipped from inside `_configure()`.
+"pomodoro/core/logger.py" = ["PLW0603"]
+
+# MARK: Pyrefly
+[tool.pyrefly]
+project-excludes = [
+  "**/node_modules",
+  "**/__pycache__",
+  "**/venv/**/*",
+  "**/.venv/**/*",
+  "**/.uv_cache/**/*",
+]
+use-ignore-files = false
+disable-project-excludes-heuristics = true
+
+# MARK: import-linter (CES-5 layer direction, CES-17 api-boundary layout)
+[tool.importlinter]
+root_package = "pomodoro"
+
+[[tool.importlinter.contracts]]
+name = "Layered architecture (CES-5)"
+type = "layers"
+layers = [
+  "pomodoro.entrypoints",
+  "pomodoro.api",
+  "pomodoro.database",
+  "pomodoro.core",
+]
+
+# CES-17 api-boundary layout: the api package is the only inbound HTTP boundary; nothing
+# outside api may import api.schemas/routers internals.
+[[tool.importlinter.contracts]]
+name = "API is the only inbound boundary (CES-17)"
+type = "forbidden"
+source_modules = ["pomodoro.core", "pomodoro.database"]
+forbidden_modules = ["pomodoro.api"]
+
+# MARK: Pytest
+[tool.pytest.ini_options]
+# Imports must never come from sys.path: `importlib` mode imports test modules
+# without inserting their directory, so the package under test resolves from the
+# installed distribution only. The default `prepend` mode mutates sys.path.
+addopts = ["--import-mode=importlib"]
+consider_namespace_packages = false
+asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = [
+  "unit: fast isolated tests, no external deps",
+  "integration: tests requiring external services or multi-component interaction",
+  "e2e: end-to-end smoke tests",
+]
+
+[project]
+name = "pomodoro-backend"
+# Not published anywhere; a deployable internal service, so a static version is
+# enough (unlike the root package, which uses hatch-vcs for its own build).
+version = "0.1.0"
+description = "Pomodoro Collective backend (FastAPI)"
+readme = "README.md"
+requires-python = ">=3.14"
+
+# MARK: Dependencies
+dependencies = [
+  "fastapi>=0.115.0",
+  "pydantic>=2.9.0",
+  "pydantic-settings>=2.6.0",
+  "sqlmodel>=0.0.22",
+  "structlog>=24.4.0",
+]
+
+# MARK: Extra deps
+[dependency-groups]
+dev = [
+  "pytest>=8.3.3",
+  "pytest-asyncio>=0.24.0",
+  "pytest-timeout>=2.3.1",
+  # CES-111 (test-order-randomization-pytest-randomly): random, reproducibly-seeded test
+  # order on every run — catches state-leaking/order-dependent tests for free.
+  "pytest-randomly>=4.1.0",
+  "ruff>=0.7.0",
+  "httpx>=0.27.0",
+  "import-linter>=2.1",
+  # Only used for `sqlalchemy.engine.Engine` in TYPE_CHECKING-gated type hints; sqlmodel
+  # pulls it in as a runtime transitive dependency already.
+  "sqlalchemy>=2.0.35",
+]

@@ -85,7 +85,11 @@ stages = ["commit-msg"]
 [[repos.hooks]]
 id = "jscpd"
 name = "jscpd (copy-paste duplication)"
-entry = "npx --yes jscpd@5 . --threshold 1"
+# .agents/snippets/ are botica drop-in templates (CES-74 etc.): consumers are expected to
+# copy them verbatim into their own package, so a snippet and its copy are not the kind of
+# accidental duplication this gate exists to catch (same reasoning as the ruff/deptry/pyrefly
+# excludes for .agents/ elsewhere in this repo).
+entry = "npx --yes jscpd@5 . --threshold 1 --ignore \"**/.agents/**\""
 language = "system"
 pass_filenames = false
 priority = 2
