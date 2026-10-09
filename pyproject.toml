@@ -87,8 +87,8 @@ max-complexity = 10
 ban-relative-imports = "all"
 
 [tool.ruff.lint.per-file-ignores]
-# S106: tests legitimately pass literal password strings as fixture data, never real secrets.
-"backend/tests/**" = ["S101", "INP001", "S603", "S607", "S106"]
+# S105/S106: tests legitimately pass literal password strings as fixture data, never real secrets.
+"backend/tests/**" = ["S101", "INP001", "S603", "S607", "S105", "S106"]
 # backend/alembic is driven by the `alembic` CLI as standalone scripts (env.py, each revision
 # module), never imported as a package, so it carries no __init__.py (CES-18, ADR-0002).
 "backend/alembic/**" = ["INP001"]

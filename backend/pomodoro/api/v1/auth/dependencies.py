@@ -11,8 +11,9 @@ module-level import, never `TYPE_CHECKING`-only.
 
 from __future__ import annotations
 
-from fastapi import Cookie, Depends, HTTPException
+from fastapi import Cookie, Depends, HTTPException, Request
 
+from pomodoro.api.v1.auth.rate_limit import RateLimiter
 from pomodoro.core.auth_sessions import (
     SESSION_COOKIE_NAME,
     AuthSession,
@@ -60,3 +61,8 @@ def get_current_user(
     if user is None:
         raise HTTPException(status_code=401, detail="Not authenticated.")
     return user
+
+
+def get_rate_limiter(request: Request) -> RateLimiter:
+    """Dependency provider: the per-app `RateLimiter` set on `app.state` by `create_app()`."""
+    return request.app.state.rate_limiter

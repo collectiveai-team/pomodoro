@@ -7,6 +7,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.exceptions import StarletteHTTPException as HTTPException
 from fastapi.responses import JSONResponse
 
+from pomodoro.api.v1.auth.rate_limit import InMemoryRateLimiter, RateLimitExceededError
 from pomodoro.api.v1.auth.routers import router as auth_router
 from pomodoro.api.v1.routers.health import router as health_router
 from pomodoro.api.v1.schemas.responses.error import ErrorResponse
@@ -64,6 +65,13 @@ def _register_exception_handlers(app: FastAPI) -> None:
         log.info("invalid_credentials", path=request.url.path)
         return _error_response(401, str(exc), "invalid_credentials")
 
+    @app.exception_handler(RateLimitExceededError)
+    async def _handle_rate_limit_exceeded(
+        request: Request, exc: RateLimitExceededError
+    ) -> JSONResponse:
+        log.info("rate_limit_exceeded", path=request.url.path)
+        return _error_response(429, str(exc), "rate_limited")
+
     @app.exception_handler(Exception)
     async def _handle_unexpected_error(request: Request, exc: Exception) -> JSONResponse:
         log.error("unhandled_exception", path=request.url.path, exc_info=exc)
@@ -74,6 +82,7 @@ def create_app() -> FastAPI:
     """Build the FastAPI application: routers, dependency providers, and error handlers."""
     settings = get_settings()
     app = FastAPI(title="Pomodoro Collective", debug=settings.debug)
+    app.state.rate_limiter = InMemoryRateLimiter()
 
     _register_exception_handlers(app)
     app.include_router(health_router, prefix="/api")
