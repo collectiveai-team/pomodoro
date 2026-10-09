@@ -16,10 +16,14 @@ extend = "../pyproject.toml"
 # directory, so it does not reach this project's nested tests/ — repeated here.
 # S105/S106/S107 (possible hardcoded password): fixture hashes/tokens/passwords here
 # are deliberate test literals, never real secrets.
-"tests/**" = ["S101", "INP001", "S603", "S607", "S105", "S106", "S107"]
+# B008: throwaway test routers wire `Depends(...)` the same way real routers do (T8).
+"tests/**" = ["S101", "INP001", "S603", "S607", "S105", "S106", "S107", "B008"]
 # FastAPI resolves dependencies by parameter default (`Depends(...)`), which ruff's
 # flake8-bugbear otherwise flags as a mutable/call-in-default-argument hazard.
+# entrypoints/dependencies.py is included too (T8): `require_session` depends on
+# `get_db_session` the same way a router does.
 "pomodoro/api/**" = ["B008"]
+"pomodoro/entrypoints/dependencies.py" = ["B008"]
 # CES-74 house logger drop-in: the documented lazy-configure-once pattern needs a
 # module-level flag flipped from inside `_configure()`.
 "pomodoro/core/logger.py" = ["PLW0603"]

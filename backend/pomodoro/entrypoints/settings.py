@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     )
 
     database_url: str = Field(default="sqlite:///./pomodoro.db")
+    # Opt-in trust of `X-Forwarded-For` for client-IP resolution (T8 rate limiting). Off by
+    # default: a prior build let `--forwarded-allow-ips=*` make the IP dimension
+    # attacker-controlled, defeating the rate limiter outright. Only flip this on behind a
+    # real, configured edge proxy (see backend/Dockerfile's deploy notes, T30).
+    trust_forwarded_for: bool = Field(default=False)
 
 
 @lru_cache
