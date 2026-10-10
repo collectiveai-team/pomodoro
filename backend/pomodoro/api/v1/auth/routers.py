@@ -21,13 +21,14 @@ from pomodoro.api.v1.auth.schemas.requests.login import LoginRequest
 from pomodoro.api.v1.auth.schemas.requests.register import RegisterRequest
 from pomodoro.api.v1.auth.schemas.responses.session import UserResponse
 from pomodoro.api.v1.auth.use_cases import login_user, register_user
+from pomodoro.api.v1.dependencies import get_clock
 from pomodoro.core.auth_sessions import (
     SESSION_COOKIE_NAME,
     SESSION_DURATION,
     AuthSession,
     AuthSessionRepository,
 )
-from pomodoro.core.clock import Clock, get_clock
+from pomodoro.core.clock import Clock
 from pomodoro.core.users import (
     DuplicateEmailError,
     InvalidCredentialsError,

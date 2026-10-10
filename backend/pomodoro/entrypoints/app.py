@@ -31,10 +31,13 @@ from pomodoro.core.users import (
     InvalidEmailError,
     InvalidPasswordLengthError,
 )
+from pomodoro.entrypoints.clock import SystemClock
 from pomodoro.settings import get_settings
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
+
+    from pomodoro.core.clock import Clock
 
 log = get_logger(__name__)
 
@@ -98,11 +101,12 @@ def _register_exception_handlers(app: FastAPI) -> None:
         return _error_response(500, "Internal server error.", "internal_error")
 
 
-def create_app() -> FastAPI:
+def create_app(*, clock: Clock | None = None) -> FastAPI:
     """Build the FastAPI application: routers, dependency providers, and error handlers."""
     settings = get_settings()
     app = FastAPI(title="Pomodoro Collective", debug=settings.debug)
     app.state.rate_limiter = InMemoryRateLimiter()
+    app.state.clock = clock if clock is not None else SystemClock()
 
     _register_exception_handlers(app)
     app.include_router(health_router, prefix="/api")

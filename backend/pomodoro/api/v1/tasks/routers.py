@@ -12,6 +12,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query
 
 from pomodoro.api.v1.auth.dependencies import get_current_user
+from pomodoro.api.v1.dependencies import get_clock
 from pomodoro.api.v1.tasks.schemas.requests.create_task import CreateTaskRequest
 from pomodoro.api.v1.tasks.schemas.requests.reorder_tasks import ReorderTasksRequest
 from pomodoro.api.v1.tasks.schemas.requests.set_task_tags import SetTaskTagsRequest
@@ -30,7 +31,7 @@ from pomodoro.api.v1.tasks.use_cases import (
     set_task_tags,
     unarchive_task,
 )
-from pomodoro.core.clock import Clock, get_clock
+from pomodoro.core.clock import Clock
 from pomodoro.core.tags import TagId, TagRepository
 from pomodoro.core.task_filtering import TaskTagFilter, filter_tasks
 from pomodoro.core.tasks import Task, TaskId, TaskRepository

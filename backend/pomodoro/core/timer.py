@@ -5,10 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from enum import StrEnum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
     from pomodoro.core.tasks import TaskId
+    from pomodoro.core.users import UserId
 
 POMODORO_SECONDS = 25 * 60
 BREAK_SHORT_SECONDS = 5 * 60
@@ -82,6 +83,30 @@ class LoggedPomodoro:
 
     timer: Timer
     pomodoro: Pomodoro
+
+
+class TimerRepository(Protocol):
+    """Persistence interface for a User's one live Timer (implemented by `database`)."""
+
+    def get(self, user_id: UserId) -> Timer | None:
+        """Return the Timer stored for `user_id`, if that User has ever saved one."""
+        ...
+
+    def save(self, user_id: UserId, timer: Timer) -> None:
+        """Create or replace `user_id`'s Timer state."""
+        ...
+
+
+class PomodoroRepository(Protocol):
+    """Persistence interface for a User's recorded Pomodoros (implemented by `database`)."""
+
+    def add(self, user_id: UserId, pomodoro: Pomodoro) -> None:
+        """Persist a completed or deliberately logged interrupted Pomodoro for `user_id`."""
+        ...
+
+    def list_for_user(self, user_id: UserId) -> list[Pomodoro]:
+        """Return only `user_id`'s recorded Pomodoros in chronological completion order."""
+        ...
 
 
 def active_seconds(timer: Timer, now: datetime) -> int:

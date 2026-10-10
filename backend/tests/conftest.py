@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 from fastapi.testclient import TestClient
-from pomodoro.core.clock import get_clock
+from pomodoro.api.v1.dependencies import get_clock
 from pomodoro.database import models  # noqa: F401 — registers every table on SQLModel.metadata
 from pomodoro.database.engine import build_engine
 from pomodoro.database.session import get_db_session

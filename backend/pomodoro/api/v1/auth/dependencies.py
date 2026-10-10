@@ -14,6 +14,7 @@ from __future__ import annotations
 from fastapi import Cookie, Depends, HTTPException, Request
 
 from pomodoro.api.v1.auth.rate_limit import RateLimiter
+from pomodoro.api.v1.dependencies import get_clock
 from pomodoro.core.auth_sessions import (
     SESSION_COOKIE_NAME,
     AuthSession,
@@ -21,7 +22,7 @@ from pomodoro.core.auth_sessions import (
     hash_session_token,
     needs_renewal,
 )
-from pomodoro.core.clock import Clock, get_clock
+from pomodoro.core.clock import Clock
 from pomodoro.core.users import User, UserRepository
 from pomodoro.database.repositories.auth_session import get_auth_session_repository
 from pomodoro.database.repositories.user import get_user_repository

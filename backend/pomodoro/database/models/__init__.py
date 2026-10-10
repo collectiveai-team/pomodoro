@@ -7,6 +7,7 @@ from pomodoro.database.models.pomodoro import PomodoroTable
 from pomodoro.database.models.tag import TagTable
 from pomodoro.database.models.task import TaskTable
 from pomodoro.database.models.task_tag import TaskTagTable
+from pomodoro.database.models.timer import TimerTable
 from pomodoro.database.models.user import UserTable
 
 __all__ = [
@@ -15,5 +16,6 @@ __all__ = [
     "TagTable",
     "TaskTable",
     "TaskTagTable",
+    "TimerTable",
     "UserTable",
 ]

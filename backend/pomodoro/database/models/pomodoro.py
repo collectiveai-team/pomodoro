@@ -1,9 +1,4 @@
-"""The `pomodoro` table (ADR-0002 schema): minimal prerequisite for T7's delete-block rule.
-
-Only the raw table lands here. The `Pomodoro` core entity, `PomodoroRepository` Protocol, and
-Timer wiring are T11's scope; until then, `TaskRepository.task_ids_with_pomodoros` is this
-table's only consumer, answering "has this Task ever had a Pomodoro recorded" for Task deletion.
-"""
+"""The `pomodoro` table (ADR-0002 schema)."""
 
 from __future__ import annotations
 

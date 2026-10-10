@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
+from pomodoro.api.v1.dependencies import get_clock
 from pomodoro.api.v1.schemas.responses.health import HealthResponse
-from pomodoro.core.clock import Clock, get_clock
+from pomodoro.core.clock import Clock
 from pomodoro.database.session import DbSession, get_db_session
 
 router = APIRouter(tags=["health"])
