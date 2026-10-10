@@ -21,16 +21,7 @@ class SqlPomodoroRepository:
 
     def add(self, user_id: UserId, pomodoro: Pomodoro) -> None:
         """Insert one completed or deliberately logged interrupted Pomodoro and commit."""
-        self._session.add(
-            PomodoroTable(
-                user_id=user_id,
-                task_id=pomodoro.task_id,
-                started_at=as_utc(pomodoro.started_at),
-                ended_at=as_utc(pomodoro.ended_at),
-                duration_seconds=pomodoro.duration_seconds,
-                status=pomodoro.status.value,
-            )
-        )
+        stage_pomodoro(self._session, user_id, pomodoro)
         self._session.commit()
 
     def list_for_user(self, user_id: UserId) -> list[Pomodoro]:
@@ -51,6 +42,20 @@ def _to_entity(row: PomodoroTable) -> Pomodoro:
         ended_at=as_utc(row.ended_at),
         duration_seconds=row.duration_seconds,
         status=PomodoroStatus(row.status),
+    )
+
+
+def stage_pomodoro(session: Session, user_id: UserId, pomodoro: Pomodoro) -> None:
+    """Stage a Pomodoro row so another repository can commit it atomically with its own row."""
+    session.add(
+        PomodoroTable(
+            user_id=user_id,
+            task_id=pomodoro.task_id,
+            started_at=as_utc(pomodoro.started_at),
+            ended_at=as_utc(pomodoro.ended_at),
+            duration_seconds=pomodoro.duration_seconds,
+            status=pomodoro.status.value,
+        )
     )
 
 

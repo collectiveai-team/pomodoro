@@ -14,6 +14,8 @@ from pomodoro.api.v1.timer.schemas.requests.timer_action import TimerActionReque
 from pomodoro.api.v1.timer.schemas.responses.timer import InProgressTaskResponse, TimerResponse
 from pomodoro.api.v1.timer.use_cases import (
     TimerSnapshot,
+    discard_timer,
+    log_timer,
     pause_timer,
     read_timer,
     resume_timer,
@@ -142,6 +144,46 @@ def stop(
     """Stop the caller's Pomodoro and move it to AskingToLog."""
     return timer_response(
         stop_timer(
+            user_id=user.id,
+            expected_phase=payload.expected_phase,
+            clock=clock,
+            task_repository=task_repository,
+            timer_repository=timer_repository,
+        )
+    )
+
+
+@router.post("/log", responses=_ACTION_ERROR_RESPONSES)
+def log_interruption(
+    payload: TimerActionRequest,
+    user: User = Depends(get_current_user),
+    clock: Clock = Depends(get_clock),
+    task_repository: TaskRepository = Depends(get_task_repository),
+    timer_repository: TimerRepository = Depends(get_timer_repository),
+) -> TimerResponse:
+    """Log the caller's interrupted Pomodoro and reset its Timer to Idle."""
+    return timer_response(
+        log_timer(
+            user_id=user.id,
+            expected_phase=payload.expected_phase,
+            clock=clock,
+            task_repository=task_repository,
+            timer_repository=timer_repository,
+        )
+    )
+
+
+@router.post("/discard", responses=_ACTION_ERROR_RESPONSES)
+def discard_interruption(
+    payload: TimerActionRequest,
+    user: User = Depends(get_current_user),
+    clock: Clock = Depends(get_clock),
+    task_repository: TaskRepository = Depends(get_task_repository),
+    timer_repository: TimerRepository = Depends(get_timer_repository),
+) -> TimerResponse:
+    """Discard the caller's interrupted Pomodoro and reset its Timer to Idle."""
+    return timer_response(
+        discard_timer(
             user_id=user.id,
             expected_phase=payload.expected_phase,
             clock=clock,

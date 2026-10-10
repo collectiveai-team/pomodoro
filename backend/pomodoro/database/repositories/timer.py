@@ -11,8 +11,8 @@ from sqlmodel import Session
 from pomodoro.core.tasks import TaskId
 from pomodoro.core.timer import BreakKind, Pomodoro, Timer, TimerPhase, TimerRepository
 from pomodoro.core.users import UserId
-from pomodoro.database.models.pomodoro import PomodoroTable
 from pomodoro.database.models.timer import TimerTable
+from pomodoro.database.repositories.pomodoro import stage_pomodoro
 from pomodoro.database.session import get_db_session
 from pomodoro.database.timestamps import as_utc
 
@@ -38,16 +38,15 @@ class SqlTimerRepository:
     ) -> None:
         """Commit a lazy completion and its resulting Timer state as one transaction."""
         self._save_row(user_id, timer)
-        self._session.add(
-            PomodoroTable(
-                user_id=user_id,
-                task_id=completed_pomodoro.task_id,
-                started_at=as_utc(completed_pomodoro.started_at),
-                ended_at=as_utc(completed_pomodoro.ended_at),
-                duration_seconds=completed_pomodoro.duration_seconds,
-                status=completed_pomodoro.status.value,
-            )
-        )
+        stage_pomodoro(self._session, user_id, completed_pomodoro)
+        self._session.commit()
+
+    def save_logged_interruption(
+        self, user_id: UserId, timer: Timer, logged_pomodoro: Pomodoro
+    ) -> None:
+        """Commit a logged interruption and its resulting Idle Timer as one transaction."""
+        self._save_row(user_id, timer)
+        stage_pomodoro(self._session, user_id, logged_pomodoro)
         self._session.commit()
 
     def _save_row(self, user_id: UserId, timer: Timer) -> None:

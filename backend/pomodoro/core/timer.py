@@ -102,6 +102,12 @@ class TimerRepository(Protocol):
         """Atomically persist a settled Timer and its one newly completed Pomodoro."""
         ...
 
+    def save_logged_interruption(
+        self, user_id: UserId, timer: Timer, logged_pomodoro: Pomodoro
+    ) -> None:
+        """Atomically persist an interrupted Pomodoro and its resulting Idle Timer."""
+        ...
+
 
 class PomodoroRepository(Protocol):
     """Persistence interface for a User's recorded Pomodoros (implemented by `database`)."""

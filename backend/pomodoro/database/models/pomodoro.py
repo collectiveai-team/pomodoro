@@ -14,7 +14,9 @@ class PomodoroTable(SQLModel, table=True):
 
     __tablename__ = "pomodoro"  # pyrefly: ignore[bad-override]
     __table_args__ = (
-        sa.CheckConstraint("duration_seconds > 0", name="ck_pomodoro_duration_seconds_positive"),
+        sa.CheckConstraint(
+            "duration_seconds >= 0", name="ck_pomodoro_duration_seconds_nonnegative"
+        ),
         sa.CheckConstraint(
             "status IN ('completed', 'interrupted_logged')", name="ck_pomodoro_status"
         ),

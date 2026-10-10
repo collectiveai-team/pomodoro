@@ -15,6 +15,8 @@ from pomodoro.core.timer import (
     TimerPhase,
     TimerRepository,
     active_seconds,
+    discard,
+    log,
     pause,
     resume,
     settle,
@@ -82,9 +84,7 @@ def start_timer(
     try:
         timer = start(current, task_id=task_id, now=now)
     except InvalidTimerTransitionError as exc:
-        raise TimerPhaseConflictError(
-            _snapshot(user_id=user_id, timer=current, now=now, task_repository=task_repository)
-        ) from exc
+        raise _phase_conflict(user_id, current, now, task_repository) from exc
     timer_repository.save(user_id, timer)
     return _snapshot(user_id=user_id, timer=timer, now=now, task_repository=task_repository)
 
@@ -146,6 +146,47 @@ def stop_timer(
     )
 
 
+def log_timer(
+    *,
+    user_id: UserId,
+    expected_phase: TimerPhase,
+    clock: Clock,
+    task_repository: TaskRepository,
+    timer_repository: TimerRepository,
+) -> TimerSnapshot:
+    """Settle, phase-guard, and atomically persist an interrupted Pomodoro and Idle Timer."""
+    now = clock.now()
+    current = _settle_and_persist(user_id=user_id, now=now, timer_repository=timer_repository)
+    _ensure_expected_phase(
+        current, expected_phase, user_id=user_id, now=now, task_repository=task_repository
+    )
+    try:
+        logged = log(current, now=now)
+    except InvalidTimerTransitionError as exc:
+        raise _phase_conflict(user_id, current, now, task_repository) from exc
+    timer_repository.save_logged_interruption(user_id, logged.timer, logged.pomodoro)
+    return _snapshot(user_id=user_id, timer=logged.timer, now=now, task_repository=task_repository)
+
+
+def discard_timer(
+    *,
+    user_id: UserId,
+    expected_phase: TimerPhase,
+    clock: Clock,
+    task_repository: TaskRepository,
+    timer_repository: TimerRepository,
+) -> TimerSnapshot:
+    """Settle, phase-guard, and discard an interrupted Pomodoro without recording it."""
+    return _transition_timer(
+        user_id=user_id,
+        expected_phase=expected_phase,
+        clock=clock,
+        task_repository=task_repository,
+        timer_repository=timer_repository,
+        transition=_discard,
+    )
+
+
 def _transition_timer(
     *,
     user_id: UserId,
@@ -164,9 +205,7 @@ def _transition_timer(
     try:
         timer = transition(current, now=now)
     except InvalidTimerTransitionError as exc:
-        raise TimerPhaseConflictError(
-            _snapshot(user_id=user_id, timer=current, now=now, task_repository=task_repository)
-        ) from exc
+        raise _phase_conflict(user_id, current, now, task_repository) from exc
     timer_repository.save(user_id, timer)
     return _snapshot(user_id=user_id, timer=timer, now=now, task_repository=task_repository)
 
@@ -177,6 +216,21 @@ class TimerTransition(Protocol):
     def __call__(self, timer: Timer, *, now: datetime) -> Timer:
         """Return the next Timer state for `timer` at `now`."""
         ...
+
+
+def _discard(timer: Timer, *, now: datetime) -> Timer:
+    """Adapt discard's timestamp-free core interface to the shared transition seam."""
+    del now
+    return discard(timer)
+
+
+def _phase_conflict(
+    user_id: UserId, timer: Timer, now: datetime, task_repository: TaskRepository
+) -> TimerPhaseConflictError:
+    """Build the settled Timer snapshot used to resynchronize a stale caller."""
+    return TimerPhaseConflictError(
+        _snapshot(user_id=user_id, timer=timer, now=now, task_repository=task_repository)
+    )
 
 
 def _settle_and_persist(
