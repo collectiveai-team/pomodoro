@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from fastapi import Depends
 from sqlmodel import Session, select
 
@@ -29,6 +31,19 @@ class SqlPomodoroRepository:
         rows = self._session.exec(
             select(PomodoroTable)
             .where(PomodoroTable.user_id == user_id)
+            .order_by(PomodoroTable.ended_at, PomodoroTable.id)  # pyrefly: ignore[bad-argument-type]
+        ).all()
+        return [_to_entity(row) for row in rows]
+
+    def list_for_user_in_range(
+        self, user_id: UserId, start: datetime, end: datetime
+    ) -> list[Pomodoro]:
+        """Return this User's Pomodoros whose `ended_at` falls in `[start, end)` UTC (T18)."""
+        rows = self._session.exec(
+            select(PomodoroTable)
+            .where(PomodoroTable.user_id == user_id)
+            .where(PomodoroTable.ended_at >= as_utc(start))
+            .where(PomodoroTable.ended_at < as_utc(end))
             .order_by(PomodoroTable.ended_at, PomodoroTable.id)  # pyrefly: ignore[bad-argument-type]
         ).all()
         return [_to_entity(row) for row in rows]

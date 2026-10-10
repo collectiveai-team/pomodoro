@@ -120,6 +120,12 @@ class PomodoroRepository(Protocol):
         """Return only `user_id`'s recorded Pomodoros in chronological completion order."""
         ...
 
+    def list_for_user_in_range(
+        self, user_id: UserId, start: datetime, end: datetime
+    ) -> list[Pomodoro]:
+        """Return `user_id`'s Pomodoros whose `ended_at` falls in `[start, end)` UTC (T18)."""
+        ...
+
 
 def active_seconds(timer: Timer, now: datetime) -> int:
     """Return elapsed active seconds, excluding any paused interval."""

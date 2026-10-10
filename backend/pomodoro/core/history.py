@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
@@ -62,6 +63,26 @@ def aggregate_pomodoros_by_day(
             totals.completed_count += 1
 
     return tuple(_build_day_aggregate(day, tasks) for day, tasks in sorted(buckets.items()))
+
+
+def local_month_utc_range(year: int, month: int, *, time_zone: str) -> tuple[datetime, datetime]:
+    """Return the `[start, end)` UTC instants covering one local calendar month (T18).
+
+    Computed via `zoneinfo` only, so the boundary is correct across DST transitions and stays
+    portable between SQLite and PostgreSQL.
+    """
+    zone = ZoneInfo(time_zone)
+    start_local = datetime(year, month, 1, tzinfo=zone)
+    next_year, next_month = (year + 1, 1) if month == 12 else (year, month + 1)
+    end_local = datetime(next_year, next_month, 1, tzinfo=zone)
+    return start_local.astimezone(UTC), end_local.astimezone(UTC)
+
+
+def local_day_utc_range(day: date, *, time_zone: str) -> tuple[datetime, datetime]:
+    """Return the `[start, end)` UTC instants covering one local calendar day (T18)."""
+    zone = ZoneInfo(time_zone)
+    start_local = datetime(day.year, day.month, day.day, tzinfo=zone)
+    return start_local.astimezone(UTC), (start_local + timedelta(days=1)).astimezone(UTC)
 
 
 def _build_day_aggregate(day: date, tasks: dict[TaskId, _DayTaskTotals]) -> DayAggregate:

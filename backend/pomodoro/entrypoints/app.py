@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 
 from pomodoro.api.v1.auth.rate_limit import InMemoryRateLimiter, RateLimitExceededError
 from pomodoro.api.v1.auth.routers import router as auth_router
+from pomodoro.api.v1.history.routers import router as history_router
 from pomodoro.api.v1.routers.health import router as health_router
 from pomodoro.api.v1.schemas.responses.error import ErrorResponse
 from pomodoro.api.v1.settings.routers import router as settings_router
@@ -131,6 +132,7 @@ def create_app(*, clock: Clock | None = None) -> FastAPI:
     app.include_router(tags_router, prefix="/api/v1")
     app.include_router(timer_router, prefix="/api/v1")
     app.include_router(settings_router, prefix="/api/v1")
+    app.include_router(history_router, prefix="/api/v1")
 
     return app
 
