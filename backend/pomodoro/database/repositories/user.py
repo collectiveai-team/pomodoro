@@ -49,6 +49,24 @@ class SqlUserRepository:
             return None
         return UserCredentials(user=_to_entity(row), password_hash=row.password_hash)
 
+    def update_preferences(
+        self,
+        user_id: UserId,
+        *,
+        alarm_enabled: bool,
+        notifications_enabled: bool,
+        time_zone: str,
+    ) -> None:
+        """Overwrite the `user` row's preference columns and commit."""
+        row = self._session.get(UserTable, user_id)
+        if row is None:
+            return
+        row.alarm_enabled = alarm_enabled
+        row.notifications_enabled = notifications_enabled
+        row.time_zone = time_zone
+        self._session.add(row)
+        self._session.commit()
+
 
 def _to_entity(row: UserTable) -> User:
     return User(

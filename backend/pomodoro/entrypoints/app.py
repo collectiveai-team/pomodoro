@@ -13,6 +13,7 @@ from pomodoro.api.v1.auth.rate_limit import InMemoryRateLimiter, RateLimitExceed
 from pomodoro.api.v1.auth.routers import router as auth_router
 from pomodoro.api.v1.routers.health import router as health_router
 from pomodoro.api.v1.schemas.responses.error import ErrorResponse
+from pomodoro.api.v1.settings.routers import router as settings_router
 from pomodoro.api.v1.tags.routers import router as tags_router
 from pomodoro.api.v1.tasks.routers import router as tasks_router
 from pomodoro.api.v1.timer.routers import router as timer_router
@@ -34,6 +35,7 @@ from pomodoro.core.users import (
     InvalidCredentialsError,
     InvalidEmailError,
     InvalidPasswordLengthError,
+    InvalidTimeZoneError,
 )
 from pomodoro.entrypoints.clock import SystemClock
 from pomodoro.settings import get_settings
@@ -59,6 +61,7 @@ _DOMAIN_ERROR_HANDLERS: list[tuple[type[Exception], int, str]] = [
     (InvalidEmailError, 422, "invalid_email"),
     (DuplicateEmailError, 422, "duplicate_email"),
     (InvalidPasswordLengthError, 422, "invalid_password_length"),
+    (InvalidTimeZoneError, 422, "invalid_time_zone"),
     (InvalidCredentialsError, 401, "invalid_credentials"),
     (RateLimitExceededError, 429, "rate_limited"),
     (EmptyTaskTextError, 422, "empty_task_text"),
@@ -127,6 +130,7 @@ def create_app(*, clock: Clock | None = None) -> FastAPI:
     app.include_router(tasks_router, prefix="/api/v1")
     app.include_router(tags_router, prefix="/api/v1")
     app.include_router(timer_router, prefix="/api/v1")
+    app.include_router(settings_router, prefix="/api/v1")
 
     return app
 

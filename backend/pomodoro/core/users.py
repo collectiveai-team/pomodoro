@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, NewType, Protocol
 from uuid import UUID
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from email_validator import EmailNotValidError, validate_email
 
@@ -36,6 +37,10 @@ class InvalidPasswordLengthError(ValueError):
 
 class InvalidCredentialsError(ValueError):
     """Raised on any login mismatch; the message never reveals which field was wrong."""
+
+
+class InvalidTimeZoneError(ValueError):
+    """Raised when a time zone is not a real IANA zone name."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,6 +85,14 @@ def validate_password_length(password: str) -> None:
         )
 
 
+def validate_time_zone(time_zone: str) -> None:
+    """Raise `InvalidTimeZoneError` unless `time_zone` is a real IANA zone name."""
+    try:
+        ZoneInfo(time_zone)
+    except ZoneInfoNotFoundError as exc:
+        raise InvalidTimeZoneError(f"'{time_zone}' is not a valid IANA time zone.") from exc
+
+
 class UserRepository(Protocol):
     """Persistence Protocol for `User`, implemented by `database.repositories.user`."""
 
@@ -97,4 +110,15 @@ class UserRepository(Protocol):
 
     def get_credentials_by_email_key(self, email_key: str) -> UserCredentials | None:
         """Return the User and stored password hash whose email key matches, or None."""
+        ...
+
+    def update_preferences(
+        self,
+        user_id: UserId,
+        *,
+        alarm_enabled: bool,
+        notifications_enabled: bool,
+        time_zone: str,
+    ) -> None:
+        """Overwrite the User's Alarm, notification, and time-zone preferences."""
         ...
