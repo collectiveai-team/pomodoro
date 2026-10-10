@@ -9,8 +9,9 @@ from fastapi import Depends
 from sqlmodel import Session
 
 from pomodoro.core.tasks import TaskId
-from pomodoro.core.timer import BreakKind, Timer, TimerPhase, TimerRepository
+from pomodoro.core.timer import BreakKind, Pomodoro, Timer, TimerPhase, TimerRepository
 from pomodoro.core.users import UserId
+from pomodoro.database.models.pomodoro import PomodoroTable
 from pomodoro.database.models.timer import TimerTable
 from pomodoro.database.session import get_db_session
 from pomodoro.database.timestamps import as_utc
@@ -29,6 +30,28 @@ class SqlTimerRepository:
 
     def save(self, user_id: UserId, timer: Timer) -> None:
         """Upsert `user_id`'s Timer, keeping one durable row per User."""
+        self._save_row(user_id, timer)
+        self._session.commit()
+
+    def save_completed_settlement(
+        self, user_id: UserId, timer: Timer, completed_pomodoro: Pomodoro
+    ) -> None:
+        """Commit a lazy completion and its resulting Timer state as one transaction."""
+        self._save_row(user_id, timer)
+        self._session.add(
+            PomodoroTable(
+                user_id=user_id,
+                task_id=completed_pomodoro.task_id,
+                started_at=as_utc(completed_pomodoro.started_at),
+                ended_at=as_utc(completed_pomodoro.ended_at),
+                duration_seconds=completed_pomodoro.duration_seconds,
+                status=completed_pomodoro.status.value,
+            )
+        )
+        self._session.commit()
+
+    def _save_row(self, user_id: UserId, timer: Timer) -> None:
+        """Stage the one Timer row without committing, for single or atomic writes."""
         row = self._session.get(TimerTable, user_id)
         if row is None:
             row = TimerTable(user_id=user_id, phase=timer.phase.value)
@@ -39,7 +62,6 @@ class SqlTimerRepository:
         row.accumulated_active_seconds = timer.accumulated_active_seconds
         row.running_since = _optional_as_utc(timer.running_since)
         self._session.add(row)
-        self._session.commit()
 
 
 def _optional_as_utc(value: datetime | None) -> datetime | None:

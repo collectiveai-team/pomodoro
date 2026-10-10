@@ -96,6 +96,12 @@ class TimerRepository(Protocol):
         """Create or replace `user_id`'s Timer state."""
         ...
 
+    def save_completed_settlement(
+        self, user_id: UserId, timer: Timer, completed_pomodoro: Pomodoro
+    ) -> None:
+        """Atomically persist a settled Timer and its one newly completed Pomodoro."""
+        ...
+
 
 class PomodoroRepository(Protocol):
     """Persistence interface for a User's recorded Pomodoros (implemented by `database`)."""

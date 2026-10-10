@@ -15,6 +15,9 @@ from pomodoro.api.v1.routers.health import router as health_router
 from pomodoro.api.v1.schemas.responses.error import ErrorResponse
 from pomodoro.api.v1.tags.routers import router as tags_router
 from pomodoro.api.v1.tasks.routers import router as tasks_router
+from pomodoro.api.v1.timer.routers import router as timer_router
+from pomodoro.api.v1.timer.routers import timer_response
+from pomodoro.api.v1.timer.use_cases import TimerPhaseConflictError
 from pomodoro.core.logger import get_logger
 from pomodoro.core.tags import DuplicateTagNameError, EmptyTagNameError, TagNotFoundError
 from pomodoro.core.tasks import (
@@ -92,6 +95,14 @@ def _register_exception_handlers(app: FastAPI) -> None:
         log.info("http_exception", path=request.url.path, status_code=exc.status_code)
         return _error_response(exc.status_code, str(exc.detail), "http_error")
 
+    @app.exception_handler(TimerPhaseConflictError)
+    async def _handle_timer_phase_conflict(
+        request: Request, exc: TimerPhaseConflictError
+    ) -> JSONResponse:
+        log.info("timer_phase_conflict", path=request.url.path)
+        content = timer_response(exc.snapshot).model_dump(mode="json")
+        return JSONResponse(status_code=409, content=content)
+
     for exc_type, status_code, code in _DOMAIN_ERROR_HANDLERS:
         app.add_exception_handler(exc_type, _make_domain_error_handler(status_code, code))
 
@@ -113,6 +124,7 @@ def create_app(*, clock: Clock | None = None) -> FastAPI:
     app.include_router(auth_router, prefix="/api/v1")
     app.include_router(tasks_router, prefix="/api/v1")
     app.include_router(tags_router, prefix="/api/v1")
+    app.include_router(timer_router, prefix="/api/v1")
 
     return app
 
