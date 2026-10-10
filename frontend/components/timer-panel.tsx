@@ -19,6 +19,8 @@ import {
   remainingFraction,
   syncClock,
 } from "@/lib/countdown";
+import { redirectToLoginOn401 } from "@/lib/http-session";
+import { broadcastTimerChanged, TIMER_CHANGED_EVENT } from "@/lib/timer-sync";
 import { type TimerActionPath, TimerControls } from "./timer-controls";
 import { TimerRing } from "./timer-ring";
 
@@ -39,14 +41,6 @@ function phaseEndMessage(timer: TimerResponseBody): { title: string; body: strin
     };
   }
   return { title: "Break terminado", body: "Volviste a estar en reposo." };
-}
-
-async function redirectToLoginOn401(response: Response): Promise<boolean> {
-  if (response.status === 401) {
-    window.location.assign("/login");
-    return true;
-  }
-  return false;
 }
 
 /** The live Timer panel: ring, phase-specific controls, Alarm/notification toggles (T21). */
@@ -119,6 +113,7 @@ export function TimerPanel() {
         }
         if (response.status === 409 && actionError) {
           applySnapshot(actionError as TimerResponseBody, "action");
+          broadcastTimerChanged();
           return;
         }
         if (actionError || !data) {
@@ -126,6 +121,7 @@ export function TimerPanel() {
           return;
         }
         applySnapshot(data, "action");
+        broadcastTimerChanged();
       } finally {
         setPending(false);
       }
@@ -235,6 +231,15 @@ export function TimerPanel() {
       window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
+  }, [fetchTimer]);
+
+  // Refetch when another panel on the same page changed the Timer (e.g. ▶ from the Task list).
+  useEffect(() => {
+    function handleTimerChanged() {
+      void fetchTimer("passive");
+    }
+    window.addEventListener(TIMER_CHANGED_EVENT, handleTimerChanged);
+    return () => window.removeEventListener(TIMER_CHANGED_EVENT, handleTimerChanged);
   }, [fetchTimer]);
 
   // Unlocks Alarm autoplay on the User's first interaction anywhere in the panel.
