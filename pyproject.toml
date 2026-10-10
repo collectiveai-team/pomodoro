@@ -92,6 +92,9 @@ ban-relative-imports = "all"
 # backend/alembic is driven by the `alembic` CLI as standalone scripts (env.py, each revision
 # module), never imported as a package, so it carries no __init__.py (CES-18, ADR-0002).
 "backend/alembic/**" = ["INP001"]
+# backend/scripts holds standalone dev scripts (run directly with `python`, never imported as a
+# package), so it carries no __init__.py (T20: OpenAPI export for the frontend client).
+"backend/scripts/**" = ["INP001"]
 # CES-74 (core-logger): shipped verbatim from .agents/snippets/core/logger.py; its bootstrap
 # os.getenv line and the cached-config `global` are the house snippet's own design, not ours to
 # edit.
@@ -206,6 +209,7 @@ dependencies = [
   "sqlalchemy>=2.1.4",
   "sqlmodel>=0.0.48",
   "structlog>=24.4",
+  "uvicorn[standard]>=0.32",
 ]
 
 # MARK: Extra deps
@@ -241,4 +245,6 @@ known_first_party = ["pomodoro"]
 # httpx is TestClient's runtime dependency, never imported directly in our code.
 # psycopg (ADR-0002's PostgreSQL driver) is loaded dynamically by SQLAlchemy's dialect system
 # (the `postgresql+psycopg://` URL scheme), never imported by name in our code.
-DEP002 = ["import-linter", "httpx", "psycopg"]
+# uvicorn (T20) runs the app via its CLI (`uvicorn pomodoro.entrypoints.app:app`), never
+# imported by name in our code.
+DEP002 = ["import-linter", "httpx", "psycopg", "uvicorn"]

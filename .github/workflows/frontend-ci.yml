@@ -1,0 +1,63 @@
+name: Frontend CI
+
+# Lints, type-checks, and tests the frontend (frontend/), and verifies the committed OpenAPI
+# client (frontend/lib/api/schema.ts) has not drifted from a fresh generation against the
+# backend's current OpenAPI schema (ADR-0001, User Story 91).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: frontend-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  frontend-ci:
+    name: frontend lint, typecheck, test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: $/.github/actions/setup-python-uv
+
+      - name: Export backend OpenAPI schema
+        run: |
+          mkdir -p .tmp
+          uv run python backend/scripts/export_openapi.py > .tmp/openapi.json
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: "pnpm"
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Check generated OpenAPI client is up to date
+        working-directory: frontend
+        run: |
+          pnpm run generate:api-client
+          git diff --exit-code -- lib/api/schema.ts
+
+      - name: Biome
+        working-directory: frontend
+        run: pnpm run lint
+
+      - name: Type check
+        working-directory: frontend
+        run: pnpm run typecheck
+
+      - name: Vitest
+        working-directory: frontend
+        run: pnpm run test
