@@ -1,0 +1,63 @@
+name: CI
+
+# Runs the project's deterministic test gate (team.json's `test_argv`) in CI. `unit-tests` is the
+# plain `uv run pytest -q` default: it never sets `DATABASE_URL`, so the `integration`-marked
+# tests under `backend/tests/integration/` `pytest.skip` cleanly there and the job stays
+# network-free. `integration-tests` adds a PostgreSQL service container and runs only the
+# `integration` marker against it (T19), proving the critical cross-cutting rules and the
+# Alembic migration chain on a real PostgreSQL database, not just SQLite.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  unit-tests:
+    name: unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: $/.github/actions/setup-python-uv
+
+      - name: Run tests
+        run: uv run pytest -q
+
+  integration-tests:
+    name: integration tests (PostgreSQL)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: pomodoro
+          POSTGRES_PASSWORD: pomodoro
+          POSTGRES_DB: pomodoro
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pomodoro"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: $/.github/actions/setup-python-uv
+
+      - name: Run integration tests
+        env:
+          DATABASE_URL: postgresql+psycopg://pomodoro:pomodoro@localhost:5432/pomodoro
+        run: uv run pytest -q -m integration

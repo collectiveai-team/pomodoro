@@ -9,14 +9,17 @@ from uuid import uuid4
 import pytest
 from pomodoro.database import models  # noqa: F401 — registers every table on SQLModel.metadata
 from pomodoro.database.engine import build_engine
-from pomodoro.database.models.task import TaskTable
 from pomodoro.database.models.user import UserTable
-from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, SQLModel, select
+from tests.database.task_table_cases import (
+    add_task,
+    assert_an_archived_task_does_not_block_an_active_task_with_the_same_text_key,
+    assert_two_active_tasks_with_the_same_text_key_are_rejected,
+    make_user,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
-    from uuid import UUID
 
 pytestmark = pytest.mark.unit
 
@@ -29,56 +32,18 @@ def session() -> Iterator[Session]:
         yield db_session
 
 
-def _make_user(session: Session) -> UUID:
-    user = UserTable(
-        id=uuid4(),
-        email="owner@example.com",
-        email_key="owner@example.com",
-        password_hash="hash",
-        time_zone="UTC",
-        created_at=datetime.now(UTC),
-    )
-    session.add(user)
-    session.commit()
-    return user.id
-
-
-def _add_task(
-    session: Session, user_id: UUID, text_key: str, position: int, *, archived: bool = False
-) -> None:
-    session.add(
-        TaskTable(
-            user_id=user_id,
-            text="Write report",
-            text_key=text_key,
-            position=position,
-            created_at=datetime.now(UTC),
-            archived_at=datetime.now(UTC) if archived else None,
-        )
-    )
-    session.commit()
-
-
 def test_two_active_tasks_with_the_same_text_key_are_rejected(session: Session) -> None:
-    user_id = _make_user(session)
-    _add_task(session, user_id, "write report", 0)
-
-    with pytest.raises(IntegrityError):
-        _add_task(session, user_id, "write report", -1)
-    session.rollback()
+    assert_two_active_tasks_with_the_same_text_key_are_rejected(session)
 
 
 def test_an_archived_task_does_not_block_an_active_task_with_the_same_text_key(
     session: Session,
 ) -> None:
-    user_id = _make_user(session)
-    _add_task(session, user_id, "write report", 0, archived=True)
-
-    _add_task(session, user_id, "write report", -1)  # must not raise
+    assert_an_archived_task_does_not_block_an_active_task_with_the_same_text_key(session)
 
 
 def test_two_different_users_may_share_the_same_text_key(session: Session) -> None:
-    first_user_id = _make_user(session)
+    first_user_id = make_user(session)
     session.add(
         UserTable(
             id=uuid4(),
@@ -94,5 +59,5 @@ def test_two_different_users_may_share_the_same_text_key(session: Session) -> No
         select(UserTable).where(UserTable.email_key == "other@example.com")
     ).one()
 
-    _add_task(session, first_user_id, "write report", 0)
-    _add_task(session, second_user.id, "write report", 0)  # must not raise
+    add_task(session, first_user_id, "write report", 0)
+    add_task(session, second_user.id, "write report", 0)  # must not raise
