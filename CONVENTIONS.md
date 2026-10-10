@@ -208,6 +208,19 @@ evidence, so never weaken a gate to make a run pass: fix the project.
 **OPEN** once anything is consumed outside this repo: the public surface, its
 stability guarantee, and a deprecation policy.
 
+## Deployment (Docker)
+
+- `backend/Dockerfile` (FastAPI under uvicorn) and `frontend/Dockerfile` (Next.js standalone) are
+  built from the repository root context; both are linted by `hadolint` (CES-114).
+- `docker-compose.yml` runs PostgreSQL + backend + frontend as a production-like local stack.
+  **Binding deviation from the generic `api-sqlmodel-alembic` rule (ADR-0002, spec):** Alembic
+  migrations run as an explicit one-shot step (`docker compose run --rm migrate`, also a
+  `service_completed_successfully` dependency of `backend`), never at app startup. Record this
+  in the PR.
+- Docker-less local development is unchanged: SQLite under `backend/.tmp/`, no external services.
+- Smoke check: `backend/scripts/smoke_compose.sh` builds, migrates, brings the stack up, confirms
+  `/api/health` through the frontend (`FRONTEND_PORT`, default 3000), then tears it down.
+
 ## Browser and API verification — OPEN
 
 No UI surface exists yet. When one lands: record the dev-server start command and

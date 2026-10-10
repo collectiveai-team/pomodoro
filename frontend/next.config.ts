@@ -8,6 +8,8 @@ import type { NextConfig } from "next";
 const BACKEND_INTERNAL_URL = process.env.BACKEND_INTERNAL_URL ?? "http://127.0.0.1:8000";
 
 const nextConfig: NextConfig = {
+  // Self-contained server bundle for the Docker image (T25).
+  output: "standalone",
   async rewrites() {
     return [
       {
