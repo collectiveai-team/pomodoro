@@ -32,3 +32,5 @@ class TimerResponse(BaseModel):
     running_since: datetime | None
     server_now: datetime
     remaining_seconds: int | None
+    pomodoros_completed_today: int
+    pomodoros_until_long_break: int

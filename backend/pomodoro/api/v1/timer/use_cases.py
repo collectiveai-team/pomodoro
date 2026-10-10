@@ -1,52 +1,60 @@
-"""Timer lifecycle orchestration; core owns all state-transition rules (T12)."""
+"""Timer lifecycle orchestration; core owns all state-transition rules (T12-T13)."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING
 
-from pomodoro.core.tasks import Task, TaskId, TaskNotFoundError, TaskRepository
+from pomodoro.api.v1.timer.snapshots import (
+    TimerPhaseConflictError,
+    TimerSnapshot,
+    ensure_expected_phase,
+    phase_conflict,
+    snapshot,
+)
+from pomodoro.api.v1.timer.transitions import (
+    TimerTransition,
+    discard_transition,
+    skip_break_transition,
+)
+from pomodoro.core.daily_summary import completed_pomodoro_count
+from pomodoro.core.tasks import TaskId, TaskNotFoundError, TaskRepository
 from pomodoro.core.timer import (
-    BREAK_LONG_SECONDS,
-    BREAK_SHORT_SECONDS,
-    POMODORO_SECONDS,
     InvalidTimerTransitionError,
+    PomodoroRepository,
     Timer,
     TimerPhase,
     TimerRepository,
-    active_seconds,
-    discard,
     log,
+    next_pomodoro,
     pause,
     resume,
     settle,
     start,
+    start_break,
     stop,
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from datetime import datetime
 
     from pomodoro.core.clock import Clock
     from pomodoro.core.users import UserId
 
-
-@dataclass(frozen=True, slots=True)
-class TimerSnapshot:
-    """The complete settled Timer view returned to HTTP presentation code."""
-
-    timer: Timer
-    server_now: datetime
-    task: Task | None
-    remaining_seconds: int | None
-
-
-class TimerPhaseConflictError(Exception):
-    """A stale Timer action, carrying the current settled view for client resynchronization."""
-
-    def __init__(self, snapshot: TimerSnapshot) -> None:
-        super().__init__("Timer phase no longer matches the caller's view.")
-        self.snapshot = snapshot
+__all__ = [
+    "TimerPhaseConflictError",
+    "TimerSnapshot",
+    "discard_timer",
+    "log_timer",
+    "next_pomodoro_timer",
+    "pause_timer",
+    "read_timer",
+    "resume_timer",
+    "skip_break_timer",
+    "start_break_timer",
+    "start_timer",
+    "stop_timer",
+]
 
 
 def read_timer(
@@ -55,11 +63,20 @@ def read_timer(
     clock: Clock,
     task_repository: TaskRepository,
     timer_repository: TimerRepository,
+    pomodoro_repository: PomodoroRepository,
+    time_zone: str,
 ) -> TimerSnapshot:
     """Settle and return the caller's durable Timer view."""
     now = clock.now()
     timer = _settle_and_persist(user_id=user_id, now=now, timer_repository=timer_repository)
-    return _snapshot(user_id=user_id, timer=timer, now=now, task_repository=task_repository)
+    return snapshot(
+        user_id=user_id,
+        timer=timer,
+        now=now,
+        task_repository=task_repository,
+        pomodoro_repository=pomodoro_repository,
+        time_zone=time_zone,
+    )
 
 
 def start_timer(
@@ -70,23 +87,32 @@ def start_timer(
     clock: Clock,
     task_repository: TaskRepository,
     timer_repository: TimerRepository,
+    pomodoro_repository: PomodoroRepository,
+    time_zone: str,
 ) -> TimerSnapshot:
     """Settle, phase-guard, and start a Pomodoro for one of the caller's Active Tasks."""
-    now = clock.now()
-    current = _settle_and_persist(user_id=user_id, now=now, timer_repository=timer_repository)
-    _ensure_expected_phase(
-        current, expected_phase, user_id=user_id, now=now, task_repository=task_repository
+    now, current = _settle_and_guard(
+        user_id=user_id,
+        expected_phase=expected_phase,
+        clock=clock,
+        task_repository=task_repository,
+        timer_repository=timer_repository,
+        pomodoro_repository=pomodoro_repository,
+        time_zone=time_zone,
     )
     task = task_repository.get_by_id(user_id, task_id)
     if task is None or not task.is_active:
         raise TaskNotFoundError(f"Active Task {task_id} not found.")
-
-    try:
-        timer = start(current, task_id=task_id, now=now)
-    except InvalidTimerTransitionError as exc:
-        raise _phase_conflict(user_id, current, now, task_repository) from exc
-    timer_repository.save(user_id, timer)
-    return _snapshot(user_id=user_id, timer=timer, now=now, task_repository=task_repository)
+    return _apply_transition(
+        user_id=user_id,
+        current=current,
+        now=now,
+        task_repository=task_repository,
+        timer_repository=timer_repository,
+        pomodoro_repository=pomodoro_repository,
+        time_zone=time_zone,
+        apply=lambda: start(current, task_id=task_id, now=now),
+    )
 
 
 def pause_timer(
@@ -96,14 +122,18 @@ def pause_timer(
     clock: Clock,
     task_repository: TaskRepository,
     timer_repository: TimerRepository,
+    pomodoro_repository: PomodoroRepository,
+    time_zone: str,
 ) -> TimerSnapshot:
-    """Settle, phase-guard, and pause a running Pomodoro."""
+    """Settle, phase-guard, and pause a running Pomodoro or Break."""
     return _transition_timer(
         user_id=user_id,
         expected_phase=expected_phase,
         clock=clock,
         task_repository=task_repository,
         timer_repository=timer_repository,
+        pomodoro_repository=pomodoro_repository,
+        time_zone=time_zone,
         transition=pause,
     )
 
@@ -115,6 +145,8 @@ def resume_timer(
     clock: Clock,
     task_repository: TaskRepository,
     timer_repository: TimerRepository,
+    pomodoro_repository: PomodoroRepository,
+    time_zone: str,
 ) -> TimerSnapshot:
     """Settle, phase-guard, and resume a paused Pomodoro."""
     return _transition_timer(
@@ -123,6 +155,8 @@ def resume_timer(
         clock=clock,
         task_repository=task_repository,
         timer_repository=timer_repository,
+        pomodoro_repository=pomodoro_repository,
+        time_zone=time_zone,
         transition=resume,
     )
 
@@ -134,6 +168,8 @@ def stop_timer(
     clock: Clock,
     task_repository: TaskRepository,
     timer_repository: TimerRepository,
+    pomodoro_repository: PomodoroRepository,
+    time_zone: str,
 ) -> TimerSnapshot:
     """Settle, phase-guard, and move a Pomodoro to AskingToLog."""
     return _transition_timer(
@@ -142,6 +178,8 @@ def stop_timer(
         clock=clock,
         task_repository=task_repository,
         timer_repository=timer_repository,
+        pomodoro_repository=pomodoro_repository,
+        time_zone=time_zone,
         transition=stop,
     )
 
@@ -153,19 +191,34 @@ def log_timer(
     clock: Clock,
     task_repository: TaskRepository,
     timer_repository: TimerRepository,
+    pomodoro_repository: PomodoroRepository,
+    time_zone: str,
 ) -> TimerSnapshot:
     """Settle, phase-guard, and atomically persist an interrupted Pomodoro and Idle Timer."""
-    now = clock.now()
-    current = _settle_and_persist(user_id=user_id, now=now, timer_repository=timer_repository)
-    _ensure_expected_phase(
-        current, expected_phase, user_id=user_id, now=now, task_repository=task_repository
+    now, current = _settle_and_guard(
+        user_id=user_id,
+        expected_phase=expected_phase,
+        clock=clock,
+        task_repository=task_repository,
+        timer_repository=timer_repository,
+        pomodoro_repository=pomodoro_repository,
+        time_zone=time_zone,
     )
     try:
         logged = log(current, now=now)
     except InvalidTimerTransitionError as exc:
-        raise _phase_conflict(user_id, current, now, task_repository) from exc
+        raise phase_conflict(
+            user_id, current, now, task_repository, pomodoro_repository, time_zone
+        ) from exc
     timer_repository.save_logged_interruption(user_id, logged.timer, logged.pomodoro)
-    return _snapshot(user_id=user_id, timer=logged.timer, now=now, task_repository=task_repository)
+    return snapshot(
+        user_id=user_id,
+        timer=logged.timer,
+        now=now,
+        task_repository=task_repository,
+        pomodoro_repository=pomodoro_repository,
+        time_zone=time_zone,
+    )
 
 
 def discard_timer(
@@ -175,6 +228,8 @@ def discard_timer(
     clock: Clock,
     task_repository: TaskRepository,
     timer_repository: TimerRepository,
+    pomodoro_repository: PomodoroRepository,
+    time_zone: str,
 ) -> TimerSnapshot:
     """Settle, phase-guard, and discard an interrupted Pomodoro without recording it."""
     return _transition_timer(
@@ -183,7 +238,93 @@ def discard_timer(
         clock=clock,
         task_repository=task_repository,
         timer_repository=timer_repository,
-        transition=_discard,
+        pomodoro_repository=pomodoro_repository,
+        time_zone=time_zone,
+        transition=discard_transition,
+    )
+
+
+def start_break_timer(
+    *,
+    user_id: UserId,
+    expected_phase: TimerPhase,
+    clock: Clock,
+    task_repository: TaskRepository,
+    timer_repository: TimerRepository,
+    pomodoro_repository: PomodoroRepository,
+    time_zone: str,
+) -> TimerSnapshot:
+    """Settle, phase-guard, and start the Break due after completed Pomodoros."""
+    now, current = _settle_and_guard(
+        user_id=user_id,
+        expected_phase=expected_phase,
+        clock=clock,
+        task_repository=task_repository,
+        timer_repository=timer_repository,
+        pomodoro_repository=pomodoro_repository,
+        time_zone=time_zone,
+    )
+    return _apply_transition(
+        user_id=user_id,
+        current=current,
+        now=now,
+        task_repository=task_repository,
+        timer_repository=timer_repository,
+        pomodoro_repository=pomodoro_repository,
+        time_zone=time_zone,
+        apply=lambda: start_break(
+            current,
+            now=now,
+            completed_pomodoro_count=completed_pomodoro_count(
+                pomodoro_repository.list_for_user(user_id)
+            ),
+        ),
+    )
+
+
+def skip_break_timer(
+    *,
+    user_id: UserId,
+    expected_phase: TimerPhase,
+    clock: Clock,
+    task_repository: TaskRepository,
+    timer_repository: TimerRepository,
+    pomodoro_repository: PomodoroRepository,
+    time_zone: str,
+) -> TimerSnapshot:
+    """Settle, phase-guard, and skip a running or paused Break."""
+    return _transition_timer(
+        user_id=user_id,
+        expected_phase=expected_phase,
+        clock=clock,
+        task_repository=task_repository,
+        timer_repository=timer_repository,
+        pomodoro_repository=pomodoro_repository,
+        time_zone=time_zone,
+        transition=skip_break_transition,
+    )
+
+
+def next_pomodoro_timer(
+    *,
+    user_id: UserId,
+    expected_phase: TimerPhase,
+    clock: Clock,
+    task_repository: TaskRepository,
+    timer_repository: TimerRepository,
+    pomodoro_repository: PomodoroRepository,
+    time_zone: str,
+) -> TimerSnapshot:
+    """Settle, phase-guard, and restart a Pomodoro for the completed Task."""
+    return _transition_timer(
+        user_id=user_id,
+        expected_phase=expected_phase,
+        clock=clock,
+        task_repository=task_repository,
+        timer_repository=timer_repository,
+        pomodoro_repository=pomodoro_repository,
+        time_zone=time_zone,
+        transition=next_pomodoro,
     )
 
 
@@ -194,42 +335,83 @@ def _transition_timer(
     clock: Clock,
     task_repository: TaskRepository,
     timer_repository: TimerRepository,
+    pomodoro_repository: PomodoroRepository,
+    time_zone: str,
     transition: TimerTransition,
 ) -> TimerSnapshot:
     """Apply a phase-guarded core transition after exactly one lazy settlement."""
+    now, current = _settle_and_guard(
+        user_id=user_id,
+        expected_phase=expected_phase,
+        clock=clock,
+        task_repository=task_repository,
+        timer_repository=timer_repository,
+        pomodoro_repository=pomodoro_repository,
+        time_zone=time_zone,
+    )
+    return _apply_transition(
+        user_id=user_id,
+        current=current,
+        now=now,
+        task_repository=task_repository,
+        timer_repository=timer_repository,
+        pomodoro_repository=pomodoro_repository,
+        time_zone=time_zone,
+        apply=lambda: transition(current, now=now),
+    )
+
+
+def _settle_and_guard(
+    *,
+    user_id: UserId,
+    expected_phase: TimerPhase,
+    clock: Clock,
+    task_repository: TaskRepository,
+    timer_repository: TimerRepository,
+    pomodoro_repository: PomodoroRepository,
+    time_zone: str,
+) -> tuple[datetime, Timer]:
+    """Settle once and enforce the caller's expected phase before any transition."""
     now = clock.now()
     current = _settle_and_persist(user_id=user_id, now=now, timer_repository=timer_repository)
-    _ensure_expected_phase(
-        current, expected_phase, user_id=user_id, now=now, task_repository=task_repository
+    ensure_expected_phase(
+        current,
+        expected_phase,
+        user_id=user_id,
+        now=now,
+        task_repository=task_repository,
+        pomodoro_repository=pomodoro_repository,
+        time_zone=time_zone,
     )
+    return now, current
+
+
+def _apply_transition(
+    *,
+    user_id: UserId,
+    current: Timer,
+    now: datetime,
+    task_repository: TaskRepository,
+    timer_repository: TimerRepository,
+    pomodoro_repository: PomodoroRepository,
+    time_zone: str,
+    apply: Callable[[], Timer],
+) -> TimerSnapshot:
+    """Run one core transition, raising a typed conflict, then persist and snapshot it."""
     try:
-        timer = transition(current, now=now)
+        timer = apply()
     except InvalidTimerTransitionError as exc:
-        raise _phase_conflict(user_id, current, now, task_repository) from exc
+        raise phase_conflict(
+            user_id, current, now, task_repository, pomodoro_repository, time_zone
+        ) from exc
     timer_repository.save(user_id, timer)
-    return _snapshot(user_id=user_id, timer=timer, now=now, task_repository=task_repository)
-
-
-class TimerTransition(Protocol):
-    """The shared signature of the core pause, resume, and stop transitions."""
-
-    def __call__(self, timer: Timer, *, now: datetime) -> Timer:
-        """Return the next Timer state for `timer` at `now`."""
-        ...
-
-
-def _discard(timer: Timer, *, now: datetime) -> Timer:
-    """Adapt discard's timestamp-free core interface to the shared transition seam."""
-    del now
-    return discard(timer)
-
-
-def _phase_conflict(
-    user_id: UserId, timer: Timer, now: datetime, task_repository: TaskRepository
-) -> TimerPhaseConflictError:
-    """Build the settled Timer snapshot used to resynchronize a stale caller."""
-    return TimerPhaseConflictError(
-        _snapshot(user_id=user_id, timer=timer, now=now, task_repository=task_repository)
+    return snapshot(
+        user_id=user_id,
+        timer=timer,
+        now=now,
+        task_repository=task_repository,
+        pomodoro_repository=pomodoro_repository,
+        time_zone=time_zone,
     )
 
 
@@ -246,45 +428,3 @@ def _settle_and_persist(
     elif settlement.timer != persisted_timer:
         timer_repository.save(user_id, settlement.timer)
     return settlement.timer
-
-
-def _ensure_expected_phase(
-    timer: Timer,
-    expected_phase: TimerPhase,
-    *,
-    user_id: UserId,
-    now: datetime,
-    task_repository: TaskRepository,
-) -> None:
-    """Raise a resynchronization error when a stale tab names another Timer phase."""
-    if timer.phase is not expected_phase:
-        raise TimerPhaseConflictError(
-            _snapshot(user_id=user_id, timer=timer, now=now, task_repository=task_repository)
-        )
-
-
-def _snapshot(
-    *, user_id: UserId, timer: Timer, now: datetime, task_repository: TaskRepository
-) -> TimerSnapshot:
-    """Build the Timer's HTTP-neutral view, resolving its retained Task only for this User."""
-    task = None if timer.task_id is None else task_repository.get_by_id(user_id, timer.task_id)
-    return TimerSnapshot(
-        timer=timer,
-        server_now=now,
-        task=task,
-        remaining_seconds=_remaining_seconds(timer, now),
-    )
-
-
-def _remaining_seconds(timer: Timer, now: datetime) -> int | None:
-    """Return remaining active time for an active or paused phase, otherwise no countdown."""
-    if timer.phase in {TimerPhase.POMODORO_RUNNING, TimerPhase.POMODORO_PAUSED}:
-        return POMODORO_SECONDS - active_seconds(timer, now)
-    if timer.phase in {TimerPhase.BREAK_RUNNING, TimerPhase.BREAK_PAUSED}:
-        duration = (
-            BREAK_LONG_SECONDS
-            if timer.break_kind is not None and timer.break_kind.value == "long"
-            else BREAK_SHORT_SECONDS
-        )
-        return duration - active_seconds(timer, now)
-    return None
