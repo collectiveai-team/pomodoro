@@ -181,6 +181,7 @@ export function TasksPanel() {
           role="tab"
           aria-selected={tab === "active"}
           onClick={() => setTab("active")}
+          className="tab-button"
         >
           Activas ({activeState.activeCount})
         </button>
@@ -189,6 +190,7 @@ export function TasksPanel() {
           role="tab"
           aria-selected={tab === "archived"}
           onClick={() => setTab("archived")}
+          className="tab-button"
         >
           Archivadas ({archivedState.archivedCount})
         </button>
@@ -217,6 +219,7 @@ export function TasksPanel() {
               value={newTaskText}
               onChange={(event) => setNewTaskText(event.target.value)}
               disabled={creating}
+              className="field-input"
             />
             {createError ? (
               <p role="alert" className="text-sm text-red-600">

@@ -54,14 +54,16 @@ export function HistoryHeatmap({
           type="button"
           aria-label="Mes anterior"
           onClick={() => onNavigate(previousMonth(month))}
+          className="btn-secondary"
         >
           ←
         </button>
-        <h2 className="font-serif italic">{monthTitle(month)}</h2>
+        <h2 className="font-display text-lg italic">{monthTitle(month)}</h2>
         <button
           type="button"
           aria-label="Mes siguiente"
           onClick={() => onNavigate(nextMonth(month))}
+          className="btn-secondary"
         >
           →
         </button>

@@ -26,6 +26,7 @@ export function TaskFilter({ label, tags, value, onChange }: TaskFilterProps) {
         placeholder="Filtrar por texto"
         value={value.query}
         onChange={(event) => onChange({ ...value, query: event.target.value })}
+        className="field-input"
       />
       <fieldset className="flex flex-wrap gap-1 border-0 p-0">
         <legend className="sr-only">{label} - Tags</legend>
@@ -33,6 +34,7 @@ export function TaskFilter({ label, tags, value, onChange }: TaskFilterProps) {
           type="button"
           aria-pressed={value.selectedTags.includes(UNTAGGED_FILTER)}
           onClick={() => onChange(toggleTagFilter(value, UNTAGGED_FILTER))}
+          className="chip-button"
         >
           Sin etiqueta
         </button>
@@ -42,6 +44,7 @@ export function TaskFilter({ label, tags, value, onChange }: TaskFilterProps) {
             type="button"
             aria-pressed={value.selectedTags.includes(tag.id)}
             onClick={() => onChange(toggleTagFilter(value, tag.id))}
+            className="chip-button"
           >
             {tag.name}
           </button>

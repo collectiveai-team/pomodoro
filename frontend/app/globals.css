@@ -1,1 +1,65 @@
 @import "tailwindcss";
+
+/*
+ * Brand palette (Story 86): light by default, `darkAlt` under `prefers-color-scheme: dark`.
+ * Declared outside `@theme` so the values can change at runtime with the system preference;
+ * mirrored into `@theme inline` below so Tailwind utilities (`bg-accent`, `text-ink`, …)
+ * resolve through the same CSS variables instead of a value baked in at build time.
+ */
+:root {
+  --color-base: #ffffff;
+  --color-ink: #1e1e1e;
+  --color-accent: #8054ff;
+  --color-accent-pressed: #5c3cb9;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-base: #16131c;
+    --color-ink: #dcd7e6;
+    --color-accent: #a98cff;
+    /* No separate dark "pressed" value is specified by the brand spec; derive one by
+       darkening the dark accent, matching the light palette's darker-on-press pattern. */
+    --color-accent-pressed: color-mix(in srgb, #a98cff 80%, black);
+  }
+}
+
+@theme inline {
+  --color-base: var(--color-base);
+  --color-ink: var(--color-ink);
+  --color-accent: var(--color-accent);
+  --color-accent-pressed: var(--color-accent-pressed);
+  --font-sans: var(--font-olivetta), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-leitura), ui-serif, Georgia, serif;
+}
+
+/*
+ * Shared interactive primitives (Story 87): a 44px minimum touch target everywhere. Tailwind v4's
+ * `@apply` can only reference real utilities, not other custom classes, so the shared base rules
+ * are applied to every button variant's selector directly instead of chaining through a `.btn`.
+ */
+@layer components {
+  .btn-primary,
+  .btn-secondary,
+  .tab-button,
+  .chip-button {
+    @apply inline-flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply bg-accent text-white hover:opacity-90 active:bg-accent-pressed;
+  }
+  .btn-secondary,
+  .tab-button,
+  .chip-button {
+    @apply border border-ink/15 bg-transparent text-ink hover:bg-ink/5;
+  }
+  .tab-button {
+    @apply aria-selected:border-transparent aria-selected:bg-accent aria-selected:text-white;
+  }
+  .chip-button {
+    @apply aria-pressed:border-transparent aria-pressed:bg-accent aria-pressed:text-white;
+  }
+  .field-input {
+    @apply min-h-11 w-full rounded-lg border border-ink/15 bg-base px-3 py-2 text-sm text-ink placeholder:text-ink/40;
+  }
+}

@@ -331,11 +331,11 @@ export function TimerPanel() {
 
       {settings ? (
         <div className="flex flex-col items-center gap-1 text-xs">
-          <label className="flex items-center gap-2">
+          <label className="flex min-h-11 items-center gap-2">
             <input type="checkbox" checked={settings.alarm_enabled} onChange={handleToggleAlarm} />
             Alarm
           </label>
-          <label className="flex items-center gap-2">
+          <label className="flex min-h-11 items-center gap-2">
             <input
               type="checkbox"
               checked={settings.notifications_enabled}

@@ -27,6 +27,34 @@ function breakLabel(breakKind: BreakKind | null): string {
 }
 
 /** The controls for whichever phase the Timer is currently in (Stories 50, 52, 57, 59-63). */
+interface ActionButtonProps {
+  path: TimerActionPath;
+  label: string;
+  pending: boolean;
+  onAction: (path: TimerActionPath) => void;
+  variant?: "primary" | "secondary";
+}
+
+/** One touch-sized Timer action button (Story 87), styled by primary/secondary variant. */
+function ActionButton({
+  path,
+  label,
+  pending,
+  onAction,
+  variant = "secondary",
+}: ActionButtonProps) {
+  return (
+    <button
+      type="button"
+      disabled={pending}
+      onClick={() => onAction(path)}
+      className={variant === "primary" ? "btn-primary" : "btn-secondary"}
+    >
+      {label}
+    </button>
+  );
+}
+
 export function TimerControls({
   phase,
   pending,
@@ -34,78 +62,114 @@ export function TimerControls({
   accumulatedActiveSeconds,
   onAction,
 }: TimerControlsProps) {
-  const dispatch = (path: TimerActionPath) => () => onAction(path);
-
   switch (phase) {
     case "PomodoroRunning":
       return (
         <>
-          <button type="button" disabled={pending} onClick={dispatch("/api/v1/timer/pause")}>
-            Pausar
-          </button>
-          <button type="button" disabled={pending} onClick={dispatch("/api/v1/timer/stop")}>
-            Detener
-          </button>
+          <ActionButton
+            path="/api/v1/timer/pause"
+            label="Pausar"
+            pending={pending}
+            onAction={onAction}
+            variant="primary"
+          />
+          <ActionButton
+            path="/api/v1/timer/stop"
+            label="Detener"
+            pending={pending}
+            onAction={onAction}
+          />
         </>
       );
     case "PomodoroPaused":
       return (
         <>
-          <button type="button" disabled={pending} onClick={dispatch("/api/v1/timer/resume")}>
-            Reanudar
-          </button>
-          <button type="button" disabled={pending} onClick={dispatch("/api/v1/timer/stop")}>
-            Detener
-          </button>
+          <ActionButton
+            path="/api/v1/timer/resume"
+            label="Reanudar"
+            pending={pending}
+            onAction={onAction}
+            variant="primary"
+          />
+          <ActionButton
+            path="/api/v1/timer/stop"
+            label="Detener"
+            pending={pending}
+            onAction={onAction}
+          />
         </>
       );
     case "BreakRunning":
       return (
         <>
-          <button type="button" disabled={pending} onClick={dispatch("/api/v1/timer/pause")}>
-            Pausar
-          </button>
-          <button type="button" disabled={pending} onClick={dispatch("/api/v1/timer/skip-break")}>
-            Saltar Break
-          </button>
+          <ActionButton
+            path="/api/v1/timer/pause"
+            label="Pausar"
+            pending={pending}
+            onAction={onAction}
+            variant="primary"
+          />
+          <ActionButton
+            path="/api/v1/timer/skip-break"
+            label="Saltar Break"
+            pending={pending}
+            onAction={onAction}
+          />
         </>
       );
     case "BreakPaused":
       return (
         <>
-          <button type="button" disabled={pending} onClick={dispatch("/api/v1/timer/resume")}>
-            Reanudar
-          </button>
-          <button type="button" disabled={pending} onClick={dispatch("/api/v1/timer/skip-break")}>
-            Saltar Break
-          </button>
+          <ActionButton
+            path="/api/v1/timer/resume"
+            label="Reanudar"
+            pending={pending}
+            onAction={onAction}
+            variant="primary"
+          />
+          <ActionButton
+            path="/api/v1/timer/skip-break"
+            label="Saltar Break"
+            pending={pending}
+            onAction={onAction}
+          />
         </>
       );
     case "AskingToLog":
       return (
         <>
           <p>¿Registrar {minutesForLog(accumulatedActiveSeconds)} min?</p>
-          <button type="button" disabled={pending} onClick={dispatch("/api/v1/timer/log")}>
-            Registrar
-          </button>
-          <button type="button" disabled={pending} onClick={dispatch("/api/v1/timer/discard")}>
-            Descartar
-          </button>
+          <ActionButton
+            path="/api/v1/timer/log"
+            label="Registrar"
+            pending={pending}
+            onAction={onAction}
+            variant="primary"
+          />
+          <ActionButton
+            path="/api/v1/timer/discard"
+            label="Descartar"
+            pending={pending}
+            onAction={onAction}
+          />
         </>
       );
     case "ReadyForNext":
       return (
         <>
-          <button
-            type="button"
-            disabled={pending}
-            onClick={dispatch("/api/v1/timer/next-pomodoro")}
-          >
-            ▶ Otro Pomodoro
-          </button>
-          <button type="button" disabled={pending} onClick={dispatch("/api/v1/timer/start-break")}>
-            Iniciar {breakLabel(breakKind)}
-          </button>
+          <ActionButton
+            path="/api/v1/timer/next-pomodoro"
+            label="▶ Otro Pomodoro"
+            pending={pending}
+            onAction={onAction}
+            variant="primary"
+          />
+          <ActionButton
+            path="/api/v1/timer/start-break"
+            label={`Iniciar ${breakLabel(breakKind)}`}
+            pending={pending}
+            onAction={onAction}
+          />
         </>
       );
     default:

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import { leitura, olivetta } from "./fonts";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -9,8 +10,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
-      <body>{children}</body>
+    <html lang="en" className={`${olivetta.variable} ${leitura.variable}`}>
+      <body className="min-h-screen bg-base font-sans text-ink antialiased">{children}</body>
     </html>
   );
 }

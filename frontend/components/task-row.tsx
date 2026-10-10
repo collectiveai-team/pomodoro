@@ -44,13 +44,13 @@ export function TaskRow({ task, tagsById, pending, actions, dragHandle }: TaskRo
     <li
       ref={dragHandle?.setNodeRef}
       style={dragHandle?.style}
-      className="flex items-center gap-2 rounded border border-gray-200 p-2"
+      className="flex items-center gap-2 rounded-lg border border-ink/15 p-2"
     >
       {dragHandle ? (
         <button
           type="button"
           aria-label={`Reordenar ${task.text}`}
-          className="cursor-grab touch-none px-1"
+          className="flex min-h-11 min-w-11 cursor-grab touch-none items-center justify-center"
           {...dragHandle.attributes}
           {...dragHandle.listeners}
         >
@@ -61,7 +61,7 @@ export function TaskRow({ task, tagsById, pending, actions, dragHandle }: TaskRo
       {task.tag_ids.length > 0 ? (
         <span className="flex flex-wrap gap-1">
           {task.tag_ids.map((tagId) => (
-            <span key={tagId} className="rounded-full bg-violet-100 px-2 py-0.5 text-xs">
+            <span key={tagId} className="rounded-full bg-accent/15 px-2 py-0.5 text-xs">
               {tagsById.get(tagId)?.name ?? tagId}
             </span>
           ))}
@@ -74,7 +74,7 @@ export function TaskRow({ task, tagsById, pending, actions, dragHandle }: TaskRo
             aria-label={`Iniciar Pomodoro en ${task.text}`}
             disabled={pending || actions.startDisabled}
             onClick={() => actions.onStart(task.id)}
-            className="disabled:opacity-50"
+            className="btn-primary"
           >
             ▶
           </button>
@@ -82,7 +82,7 @@ export function TaskRow({ task, tagsById, pending, actions, dragHandle }: TaskRo
             type="button"
             disabled={pending}
             onClick={() => actions.onArchive(task.id)}
-            className="disabled:opacity-50"
+            className="btn-secondary"
           >
             Archivar
           </button>
@@ -93,7 +93,7 @@ export function TaskRow({ task, tagsById, pending, actions, dragHandle }: TaskRo
             type="button"
             disabled={pending}
             onClick={() => actions.onUnarchive(task.id)}
-            className="disabled:opacity-50"
+            className="btn-secondary"
           >
             Desarchivar
           </button>
@@ -102,7 +102,7 @@ export function TaskRow({ task, tagsById, pending, actions, dragHandle }: TaskRo
               type="button"
               disabled={pending}
               onClick={() => actions.onDelete(task.id)}
-              className="disabled:opacity-50"
+              className="btn-secondary"
             >
               Borrar
             </button>

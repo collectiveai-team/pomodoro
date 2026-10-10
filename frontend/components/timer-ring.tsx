@@ -48,7 +48,7 @@ export function TimerRing({ phase, remainingSeconds, fraction }: TimerRingProps)
           r={RADIUS}
           fill="none"
           stroke="currentColor"
-          className="text-violet-600"
+          className="text-accent"
           strokeWidth={8}
           strokeLinecap="round"
           strokeDasharray={CIRCUMFERENCE}

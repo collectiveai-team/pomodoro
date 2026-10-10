@@ -41,7 +41,7 @@ export function AuthForm({ title, submitLabel, onSubmit, footer }: AuthFormProps
           required
           value={email}
           onChange={(event) => setEmail(event.target.value)}
-          className="rounded border border-gray-300 px-3 py-2"
+          className="field-input"
         />
       </label>
       <label className="flex flex-col gap-1 text-sm" htmlFor="password">
@@ -53,7 +53,7 @@ export function AuthForm({ title, submitLabel, onSubmit, footer }: AuthFormProps
           required
           value={password}
           onChange={(event) => setPassword(event.target.value)}
-          className="rounded border border-gray-300 px-3 py-2"
+          className="field-input"
         />
       </label>
       {error ? (
@@ -61,11 +61,7 @@ export function AuthForm({ title, submitLabel, onSubmit, footer }: AuthFormProps
           {error}
         </p>
       ) : null}
-      <button
-        type="submit"
-        disabled={submitting}
-        className="rounded bg-violet-600 px-4 py-2 text-white disabled:opacity-50"
-      >
+      <button type="submit" disabled={submitting} className="btn-primary">
         {submitLabel}
       </button>
       {footer}

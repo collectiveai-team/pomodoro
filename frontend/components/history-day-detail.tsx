@@ -21,13 +21,13 @@ function formatDedicatedSeconds(seconds: number): string {
 /** The selected day's per-Task breakdown strip below the heatmap (Stories 78-79, 81-82). */
 export function HistoryDayDetail({ selectedDay, detail, loading }: HistoryDayDetailProps) {
   if (!selectedDay) {
-    return <p className="text-sm text-gray-500">Seleccioná un día para ver el detalle.</p>;
+    return <p className="text-sm text-ink/60">Seleccioná un día para ver el detalle.</p>;
   }
   if (loading || !detail) {
     return <p>Cargando…</p>;
   }
   if (detail.tasks.length === 0) {
-    return <p className="text-sm text-gray-500">Sin Pomodoros ese día.</p>;
+    return <p className="text-sm text-ink/60">Sin Pomodoros ese día.</p>;
   }
   return (
     <ul className="flex flex-col gap-1" aria-label={`Detalle del ${selectedDay}`}>
