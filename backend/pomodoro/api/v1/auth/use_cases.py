@@ -117,3 +117,46 @@ def login_user(
 
     log.info("user_logged_in", user_id=str(credentials.user.id))
     return AuthenticatedSession(user=credentials.user, session=session, raw_token=raw_token)
+
+
+def change_user_password(
+    *,
+    user: User,
+    current_password: str,
+    new_password: str,
+    current_session_id: AuthSessionId,
+    user_repository: UserRepository,
+    auth_session_repository: AuthSessionRepository,
+) -> None:
+    """Verify the current password, set a new one, and revoke every other session.
+
+    Raises `InvalidCredentialsError` when `current_password` does not match the User's stored
+    hash, and `InvalidPasswordLengthError` (User Story 9) when `new_password` fails length
+    validation. The caller's own session (`current_session_id`) is left untouched.
+    """
+    credentials = user_repository.get_credentials_by_id(user.id)
+    if credentials is None or not verify_password(current_password, credentials.password_hash):
+        raise InvalidCredentialsError(_INVALID_CREDENTIALS_MESSAGE)
+
+    validate_password_length(new_password)
+    user_repository.update_password(user.id, hash_password(new_password))
+    auth_session_repository.revoke_all_except(user.id, current_session_id)
+
+    log.info("password_changed", user_id=str(user.id))
+
+
+def delete_user_account(*, user: User, password: str, user_repository: UserRepository) -> None:
+    """Verify the password and permanently delete the User (User Story 10).
+
+    Raises `InvalidCredentialsError` when `password` does not match the User's stored hash.
+    Deletion relies on the `user`/`auth_session`/`task`/`pomodoro`/`tag`/`timer` FK
+    `ON DELETE CASCADE`/`RESTRICT` chain to remove every owned row; it never settles or logs an
+    in-progress Timer, which is discarded along with its row.
+    """
+    credentials = user_repository.get_credentials_by_id(user.id)
+    if credentials is None or not verify_password(password, credentials.password_hash):
+        raise InvalidCredentialsError(_INVALID_CREDENTIALS_MESSAGE)
+
+    user_repository.delete(user.id)
+
+    log.info("account_deleted", user_id=str(user.id))

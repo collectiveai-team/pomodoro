@@ -67,6 +67,30 @@ class SqlUserRepository:
         self._session.add(row)
         self._session.commit()
 
+    def get_credentials_by_id(self, user_id: UserId) -> UserCredentials | None:
+        """Return the User and stored password hash whose id matches, or None."""
+        row = self._session.get(UserTable, user_id)
+        if row is None:
+            return None
+        return UserCredentials(user=_to_entity(row), password_hash=row.password_hash)
+
+    def update_password(self, user_id: UserId, password_hash: str) -> None:
+        """Overwrite the `user` row's password hash and commit."""
+        row = self._session.get(UserTable, user_id)
+        if row is None:
+            return
+        row.password_hash = password_hash
+        self._session.add(row)
+        self._session.commit()
+
+    def delete(self, user_id: UserId) -> None:
+        """Delete the `user` row; FK `ON DELETE CASCADE`/`RESTRICT` handle every owned table."""
+        row = self._session.get(UserTable, user_id)
+        if row is None:
+            return
+        self._session.delete(row)
+        self._session.commit()
+
 
 def _to_entity(row: UserTable) -> User:
     return User(

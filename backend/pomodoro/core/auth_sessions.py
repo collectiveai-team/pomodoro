@@ -89,3 +89,7 @@ class AuthSessionRepository(Protocol):
     def revoke(self, session_id: AuthSessionId) -> None:
         """Revoke a session; its cookie must stop authenticating immediately after this."""
         ...
+
+    def revoke_all_except(self, user_id: UserId, keep_session_id: AuthSessionId) -> None:
+        """Revoke every session belonging to `user_id` other than `keep_session_id`."""
+        ...

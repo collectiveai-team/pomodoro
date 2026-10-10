@@ -122,3 +122,15 @@ class UserRepository(Protocol):
     ) -> None:
         """Overwrite the User's Alarm, notification, and time-zone preferences."""
         ...
+
+    def get_credentials_by_id(self, user_id: UserId) -> UserCredentials | None:
+        """Return the User and stored password hash whose id matches, or None."""
+        ...
+
+    def update_password(self, user_id: UserId, password_hash: str) -> None:
+        """Overwrite the User's stored Argon2 password hash."""
+        ...
+
+    def delete(self, user_id: UserId) -> None:
+        """Permanently delete the User, cascading every FK-linked table."""
+        ...

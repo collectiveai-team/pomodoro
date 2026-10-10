@@ -17,10 +17,17 @@ from pomodoro.api.v1.auth.dependencies import (
     get_rate_limiter,
 )
 from pomodoro.api.v1.auth.rate_limit import RateLimiter, rate_limit_key
+from pomodoro.api.v1.auth.schemas.requests.change_password import ChangePasswordRequest
+from pomodoro.api.v1.auth.schemas.requests.delete_account import DeleteAccountRequest
 from pomodoro.api.v1.auth.schemas.requests.login import LoginRequest
 from pomodoro.api.v1.auth.schemas.requests.register import RegisterRequest
 from pomodoro.api.v1.auth.schemas.responses.session import UserResponse
-from pomodoro.api.v1.auth.use_cases import login_user, register_user
+from pomodoro.api.v1.auth.use_cases import (
+    change_user_password,
+    delete_user_account,
+    login_user,
+    register_user,
+)
 from pomodoro.api.v1.dependencies import get_clock
 from pomodoro.core.auth_sessions import (
     SESSION_COOKIE_NAME,
@@ -151,4 +158,35 @@ def logout(
 ) -> None:
     """Revoke the caller's current session and clear its cookie."""
     auth_session_repository.revoke(auth_session.id)
+    response.delete_cookie(key=SESSION_COOKIE_NAME, path="/")
+
+
+@router.post("/change-password", status_code=204)
+def change_password(
+    payload: ChangePasswordRequest,
+    user: User = Depends(get_current_user),
+    auth_session: AuthSession = Depends(get_current_session),
+    user_repository: UserRepository = Depends(get_user_repository),
+    auth_session_repository: AuthSessionRepository = Depends(get_auth_session_repository),
+) -> None:
+    """Change the caller's password and revoke every other session (User Story 9)."""
+    change_user_password(
+        user=user,
+        current_password=payload.current_password,
+        new_password=payload.new_password,
+        current_session_id=auth_session.id,
+        user_repository=user_repository,
+        auth_session_repository=auth_session_repository,
+    )
+
+
+@router.delete("/me", status_code=204)
+def delete_account(
+    payload: DeleteAccountRequest,
+    response: Response,
+    user: User = Depends(get_current_user),
+    user_repository: UserRepository = Depends(get_user_repository),
+) -> None:
+    """Verify the password and permanently delete the caller's account (User Story 10)."""
+    delete_user_account(user=user, password=payload.password, user_repository=user_repository)
     response.delete_cookie(key=SESSION_COOKIE_NAME, path="/")
