@@ -221,10 +221,18 @@ stability guarantee, and a deprecation policy.
 - Smoke check: `backend/scripts/smoke_compose.sh` builds, migrates, brings the stack up, confirms
   `/api/health` through the frontend (`FRONTEND_PORT`, default 3000), then tears it down.
 
-## Browser and API verification — OPEN
+## Browser and API verification
 
-No UI surface exists yet. When one lands: record the dev-server start command and
-base URL here, encode stable checks as Playwright (or equivalent) tests run by
-`test_argv`, and install `agent-browser` (`npm i -g agent-browser && agent-browser install`)
-so the `visual_verifier` role can drive a real browser instead of falling back to
-playwright/curl.
+- **Dev server (frontend only, needs a backend on `BACKEND_INTERNAL_URL`):** `cd frontend && pnpm dev`,
+  base URL `http://localhost:3000`. **Production-like stack:** `docker compose up -d --wait` after
+  `docker compose run --rm migrate`, base URL `http://localhost:${FRONTEND_PORT:-3000}`; set
+  `FRONTEND_PORT` when 3000 is busy.
+- **E2E smoke (Playwright, `e2e/`):** register, create a Task, start/pause a Pomodoro, reload
+  (same Timer state), logout. It is its own pnpm package and CI workflow (`.github/workflows/e2e.yml`),
+  never part of `uv run pytest -q`. Run it with the shared compose lifecycle (build, explicit
+  migrate, up, health check, command, teardown on any exit):
+  `cd e2e && pnpm install && pnpm exec playwright install chromium && cd .. &&
+  FRONTEND_PORT=3111 backend/scripts/smoke_compose.sh pnpm --dir e2e exec playwright test`.
+  Set `PLAYWRIGHT_CHANNEL=chrome` where Playwright has no bundled browser for the OS.
+- `agent-browser` (`npm i -g agent-browser && agent-browser install`) lets the `visual_verifier`
+  role drive a real browser instead of falling back to playwright/curl.

@@ -46,3 +46,10 @@ def test_hadolint_hook_covers_nested_dockerfiles():
     assert pattern.search("Dockerfile")
     assert pattern.search("backend/Dockerfile")
     assert pattern.search("frontend/Dockerfile")
+
+
+def test_backend_declares_tzdata_for_legacy_zone_aliases() -> None:
+    """Browsers report legacy zones (America/Buenos_Aires); slim images need the tzdata package."""
+    from zoneinfo import ZoneInfo
+
+    assert ZoneInfo("America/Buenos_Aires").key == "America/Buenos_Aires"
