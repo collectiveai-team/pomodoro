@@ -3,13 +3,14 @@
 import { closestCenter, DndContext } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useMemo, useState } from "react";
 import type { components } from "@/lib/api/schema";
 import { apiClient } from "@/lib/api-client";
 import { toApiError } from "@/lib/api-error";
 import { redirectToLoginOn401 } from "@/lib/http-session";
 import { EMPTY_TASK_FILTER, type TaskFilterState } from "@/lib/task-filter";
 import { broadcastTimerChanged } from "@/lib/timer-sync";
+import { useTagCatalog } from "@/lib/use-tag-catalog";
 import { useTaskList } from "@/lib/use-task-list";
 import { createDragEndHandler, useTaskReorderSensors } from "@/lib/use-task-reorder";
 import { useTimerPhase } from "@/lib/use-timer-phase";
@@ -17,7 +18,6 @@ import { TaskFilter } from "./task-filter";
 import { TaskRow, type TaskRowProps } from "./task-row";
 
 type TaskResponseBody = components["schemas"]["TaskResponse"];
-type TagResponseBody = components["schemas"]["TagResponse"];
 
 interface TaskMutationResponse {
   error?: unknown;
@@ -47,18 +47,10 @@ function SortableTaskRow(props: SortableTaskRowProps) {
   );
 }
 
-async function fetchTagCatalog(): Promise<TagResponseBody[]> {
-  const { data, response } = await apiClient.GET("/api/v1/tags");
-  if (await redirectToLoginOn401(response)) {
-    return [];
-  }
-  return data?.tags ?? [];
-}
-
 /** The Active/Archived Tasks panel: counters, filter, creation, drag-reorder, and row actions. */
 export function TasksPanel() {
   const [tab, setTab] = useState<"active" | "archived">("active");
-  const [tags, setTags] = useState<TagResponseBody[]>([]);
+  const tags = useTagCatalog();
   const [activeFilter, setActiveFilter] = useState<TaskFilterState>(EMPTY_TASK_FILTER);
   const [archivedFilter, setArchivedFilter] = useState<TaskFilterState>(EMPTY_TASK_FILTER);
   const [newTaskText, setNewTaskText] = useState("");
@@ -70,10 +62,6 @@ export function TasksPanel() {
   const [activeState, refetchActive] = useTaskList("active", activeFilter);
   const [archivedState, refetchArchived] = useTaskList("archived", archivedFilter);
   const { phase: timerPhase, setPhase: setTimerPhase } = useTimerPhase();
-
-  useEffect(() => {
-    void fetchTagCatalog().then(setTags);
-  }, []);
 
   const tagsById = useMemo(() => new Map(tags.map((tag) => [tag.id, tag])), [tags]);
 
