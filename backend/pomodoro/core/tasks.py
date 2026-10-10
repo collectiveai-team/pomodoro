@@ -12,11 +12,14 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, NewType, Protocol
 from uuid import UUID
 
+from pomodoro.core.timer import TimerPhase
+
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
     from datetime import datetime
 
     from pomodoro.core.tags import TagId
+    from pomodoro.core.timer import Timer
     from pomodoro.core.users import UserId
 
 TaskId = NewType("TaskId", UUID)
@@ -46,6 +49,10 @@ class TaskReorderMismatchError(ValueError):
 
 class TaskHasRecordedPomodorosError(ValueError):
     """Raised when deleting a Task that has at least one Pomodoro recorded against it."""
+
+
+class TaskInUseByTimerError(ValueError):
+    """Raised when archiving or deleting a Task the caller's Timer references, non-Idle."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,6 +120,15 @@ def ensure_unique_active_text(
             continue
         if normalize_task_text(task.text) == text_key:
             raise DuplicateTaskTextError(f"A Task with this text already exists: '{task.text}'.")
+
+
+def ensure_task_not_in_timer_use(*, task_id: TaskId, timer: Timer) -> None:
+    """Raise `TaskInUseByTimerError` if `timer` is non-Idle and currently references `task_id`."""
+    if timer.phase is not TimerPhase.IDLE and timer.task_id == task_id:
+        raise TaskInUseByTimerError(
+            f"Task {task_id} is referenced by the caller's Timer and cannot be "
+            "archived or deleted while it is not Idle."
+        )
 
 
 class TaskRepository(Protocol):

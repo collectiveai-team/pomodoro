@@ -77,3 +77,22 @@ def client(db_engine: Engine, fake_clock: FakeClock) -> Iterator[TestClient]:
     # attribute and resends it on later requests, exactly as a real browser would over TLS.
     with TestClient(app, base_url="https://testserver") as test_client:
         yield test_client
+
+
+def register_user(client: TestClient, *, email: str = "owner@example.com") -> None:
+    """Register a User through the API with a fixed password and time zone."""
+    client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": email,
+            "password": "correct-horse-battery-staple",
+            "time_zone": "America/Argentina/Buenos_Aires",
+        },
+    )
+
+
+def create_task(client: TestClient, text: str) -> str:
+    """Create a Task through the API and return its id."""
+    response = client.post("/api/v1/tasks", json={"text": text})
+    assert response.status_code == 201
+    return response.json()["id"]

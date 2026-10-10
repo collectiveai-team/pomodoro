@@ -35,9 +35,11 @@ from pomodoro.core.clock import Clock
 from pomodoro.core.tags import TagId, TagRepository
 from pomodoro.core.task_filtering import TaskTagFilter, filter_tasks
 from pomodoro.core.tasks import Task, TaskId, TaskRepository
+from pomodoro.core.timer import TimerRepository
 from pomodoro.core.users import User
 from pomodoro.database.repositories.tag import get_tag_repository
 from pomodoro.database.repositories.task import get_task_repository
+from pomodoro.database.repositories.timer import get_timer_repository
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
@@ -157,10 +159,15 @@ def archive(
     user: User = Depends(get_current_user),
     clock: Clock = Depends(get_clock),
     task_repository: TaskRepository = Depends(get_task_repository),
+    timer_repository: TimerRepository = Depends(get_timer_repository),
 ) -> TaskResponse:
     """Freeze the Task's position and set `archived_at`."""
     task = archive_task(
-        user_id=user.id, task_id=TaskId(task_id), clock=clock, task_repository=task_repository
+        user_id=user.id,
+        task_id=TaskId(task_id),
+        clock=clock,
+        task_repository=task_repository,
+        timer_repository=timer_repository,
     )
     deletable = task.id not in task_repository.task_ids_with_pomodoros(user.id)
     return _task_response(task, deletable=deletable)
@@ -199,6 +206,12 @@ def delete(
     task_id: UUID,
     user: User = Depends(get_current_user),
     task_repository: TaskRepository = Depends(get_task_repository),
+    timer_repository: TimerRepository = Depends(get_timer_repository),
 ) -> None:
     """Permanently remove a Task that never had a Pomodoro recorded against it."""
-    delete_task(user_id=user.id, task_id=TaskId(task_id), task_repository=task_repository)
+    delete_task(
+        user_id=user.id,
+        task_id=TaskId(task_id),
+        task_repository=task_repository,
+        timer_repository=timer_repository,
+    )

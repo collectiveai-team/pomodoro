@@ -15,18 +15,21 @@ from pomodoro.core.tasks import (
     TaskNotFoundError,
     TaskRepository,
     ensure_reorder_covers_active_tasks,
+    ensure_task_not_in_timer_use,
     ensure_unique_active_text,
     next_active_position,
     next_unarchive_position,
     normalize_task_text,
     validate_task_text,
 )
+from pomodoro.core.timer import Timer
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from pomodoro.core.clock import Clock
     from pomodoro.core.tags import TagRepository
+    from pomodoro.core.timer import TimerRepository
     from pomodoro.core.users import UserId
 
 log = get_logger(__name__)
@@ -89,15 +92,23 @@ def edit_task_text(
 
 
 def archive_task(
-    *, user_id: UserId, task_id: TaskId, clock: Clock, task_repository: TaskRepository
+    *,
+    user_id: UserId,
+    task_id: TaskId,
+    clock: Clock,
+    task_repository: TaskRepository,
+    timer_repository: TimerRepository,
 ) -> Task:
     """Freeze the Task's `position` and set `archived_at` to now.
 
-    Raises `TaskNotFoundError` when the Task does not exist or belongs to another User.
+    Raises `TaskNotFoundError` when the Task does not exist or belongs to another User, and
+    `TaskInUseByTimerError` when the caller's Timer references it in a non-Idle phase.
     """
     task = task_repository.get_by_id(user_id, task_id)
     if task is None:
         raise TaskNotFoundError(f"Task {task_id} not found.")
+
+    ensure_task_not_in_timer_use(task_id=task_id, timer=timer_repository.get(user_id) or Timer())
 
     archived_at = clock.now()
     task_repository.archive(user_id, task_id, archived_at)
@@ -141,15 +152,24 @@ def reorder_tasks(
     return task_repository.list_active(user_id)
 
 
-def delete_task(*, user_id: UserId, task_id: TaskId, task_repository: TaskRepository) -> None:
+def delete_task(
+    *,
+    user_id: UserId,
+    task_id: TaskId,
+    task_repository: TaskRepository,
+    timer_repository: TimerRepository,
+) -> None:
     """Permanently remove a Task that never had a Pomodoro recorded against it.
 
-    Raises `TaskNotFoundError` when the Task does not exist or belongs to another User, and
+    Raises `TaskNotFoundError` when the Task does not exist or belongs to another User,
+    `TaskInUseByTimerError` when the caller's Timer references it in a non-Idle phase, and
     `TaskHasRecordedPomodorosError` when at least one Pomodoro was recorded against it.
     """
     task = task_repository.get_by_id(user_id, task_id)
     if task is None:
         raise TaskNotFoundError(f"Task {task_id} not found.")
+
+    ensure_task_not_in_timer_use(task_id=task_id, timer=timer_repository.get(user_id) or Timer())
 
     if task_id in task_repository.task_ids_with_pomodoros(user_id):
         raise TaskHasRecordedPomodorosError(
