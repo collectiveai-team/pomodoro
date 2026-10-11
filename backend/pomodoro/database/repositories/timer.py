@@ -24,8 +24,13 @@ class SqlTimerRepository:
         self._session = session
 
     def get(self, user_id: UserId) -> Timer | None:
-        """Return `user_id`'s saved Timer, if present."""
-        row = self._session.get(TimerTable, user_id)
+        """Return `user_id`'s saved Timer, if present.
+
+        The row is locked (`FOR UPDATE` on PostgreSQL; a no-op on SQLite) until the request's
+        transaction ends, so concurrent settle/log requests serialize and a Pomodoro is
+        recorded once (ADR-0003).
+        """
+        row = self._session.get(TimerTable, user_id, with_for_update=True)
         return None if row is None else _to_entity(row)
 
     def save(self, user_id: UserId, timer: Timer) -> None:

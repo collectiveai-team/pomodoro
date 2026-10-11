@@ -14,6 +14,7 @@ import { useTagCatalog } from "@/lib/use-tag-catalog";
 import { useTaskList } from "@/lib/use-task-list";
 import { createDragEndHandler, useTaskReorderSensors } from "@/lib/use-task-reorder";
 import { useTimerPhase } from "@/lib/use-timer-phase";
+import { HistoryPanel } from "./history-panel";
 import { TaskFilter } from "./task-filter";
 import { TaskRow, type TaskRowProps } from "./task-row";
 
@@ -49,7 +50,7 @@ function SortableTaskRow(props: SortableTaskRowProps) {
 
 /** The Active/Archived Tasks panel: counters, filter, creation, drag-reorder, and row actions. */
 export function TasksPanel() {
-  const [tab, setTab] = useState<"active" | "archived">("active");
+  const [tab, setTab] = useState<"active" | "archived" | "history">("active");
   const tags = useTagCatalog();
   const [activeFilter, setActiveFilter] = useState<TaskFilterState>(EMPTY_TASK_FILTER);
   const [archivedFilter, setArchivedFilter] = useState<TaskFilterState>(EMPTY_TASK_FILTER);
@@ -194,6 +195,15 @@ export function TasksPanel() {
         >
           Archivadas ({archivedState.archivedCount})
         </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === "history"}
+          onClick={() => setTab("history")}
+          className="tab-button"
+        >
+          Historial
+        </button>
       </div>
 
       {actionError ? (
@@ -256,6 +266,8 @@ export function TasksPanel() {
             </SortableContext>
           </DndContext>
         </>
+      ) : tab === "history" ? (
+        <HistoryPanel />
       ) : (
         <>
           <TaskFilter

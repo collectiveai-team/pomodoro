@@ -110,6 +110,9 @@ function setupFixture({
     if (path === "/api/v1/timer") {
       return Promise.resolve({ data: makeTimer(timerPhase), error: undefined, response: ok() });
     }
+    if (path === "/api/v1/history/month") {
+      return Promise.resolve({ data: { days: [] }, error: undefined, response: ok() });
+    }
     throw new Error(`Unexpected GET ${path}`);
   });
 }
@@ -289,5 +292,21 @@ describe("TasksPanel — drag-reorder wiring", () => {
         body: { task_ids: ["task-2", "task-3", "task-1"] },
       });
     });
+  });
+});
+
+describe("TasksPanel — Historial tab", () => {
+  it("offers Activas, Archivadas and Historial tabs and shows History inside the Historial tab", async () => {
+    setupFixture();
+    const user = userEvent.setup();
+
+    render(<TasksPanel />);
+    expect(await screen.findByRole("tab", { name: /Activas/ })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /Archivadas/ })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Filtrar Historial")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Historial" }));
+
+    expect(await screen.findByLabelText("Filtrar Historial")).toBeInTheDocument();
   });
 });

@@ -282,7 +282,7 @@ def test_discard_after_stopping_a_pomodoro_returns_idle_without_a_pomodoro_trace
     assert _pomodoros(db_engine) == []
 
 
-def test_logging_a_zero_duration_interruption_records_one_zero_duration_pomodoro(
+def test_logging_a_zero_duration_interruption_is_treated_as_a_discard(
     client: TestClient, db_engine: Engine
 ) -> None:
     _register(client)
@@ -293,14 +293,7 @@ def test_logging_a_zero_duration_interruption_records_one_zero_duration_pomodoro
     logged = client.post(f"{TIMER_URL}/log", json={"expected_phase": "AskingToLog"})
 
     _assert_idle_without_break(logged)
-    pomodoro = _assert_only_pomodoro(
-        _pomodoros(db_engine),
-        task_id=task_id,
-        status="interrupted_logged",
-        duration_seconds=0,
-    )
-    assert pomodoro.started_at.isoformat() == "2026-01-01T00:00:00+00:00"
-    assert pomodoro.ended_at.isoformat() == "2026-01-01T00:00:00+00:00"
+    assert _pomodoros(db_engine) == []
 
 
 def test_duplicate_log_returns_an_idle_timer_for_client_resynchronization(

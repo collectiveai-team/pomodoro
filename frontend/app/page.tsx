@@ -1,5 +1,4 @@
 import { AccountMenu } from "@/components/account-menu";
-import { HistoryPanel } from "@/components/history-panel";
 import { TasksPanel } from "@/components/tasks-panel";
 import { TimerPanel } from "@/components/timer-panel";
 
@@ -19,7 +18,6 @@ export default function HomePage() {
         </div>
         <div className="flex w-full flex-col gap-6 md:max-w-xl">
           <TasksPanel />
-          <HistoryPanel />
         </div>
       </div>
     </main>

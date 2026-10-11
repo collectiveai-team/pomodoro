@@ -204,6 +204,17 @@ def log_timer(
         pomodoro_repository=pomodoro_repository,
         time_zone=time_zone,
     )
+    if current.phase is TimerPhase.ASKING_TO_LOG and current.accumulated_active_seconds <= 0:
+        # A 0 s interruption is a discard, never a recorded Pomodoro (spec Further Notes).
+        timer_repository.save(user_id, Timer())
+        return snapshot(
+            user_id=user_id,
+            timer=Timer(),
+            now=now,
+            task_repository=task_repository,
+            pomodoro_repository=pomodoro_repository,
+            time_zone=time_zone,
+        )
     try:
         logged = log(current, now=now)
     except InvalidTimerTransitionError as exc:

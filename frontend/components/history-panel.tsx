@@ -31,7 +31,7 @@ export function HistoryPanel() {
   }
 
   return (
-    <section className="flex w-full max-w-md flex-col gap-4 p-6">
+    <section className="flex w-full flex-col gap-4">
       {monthSummary.error ? (
         <p role="alert" className="text-sm text-red-600">
           {monthSummary.error}
