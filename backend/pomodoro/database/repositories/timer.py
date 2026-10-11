@@ -6,6 +6,8 @@ from datetime import datetime
 from typing import cast
 
 from fastapi import Depends
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlmodel import Session
 
 from pomodoro.core.tasks import TaskId
@@ -28,10 +30,23 @@ class SqlTimerRepository:
 
         The row is locked (`FOR UPDATE` on PostgreSQL; a no-op on SQLite) until the request's
         transaction ends, so concurrent settle/log requests serialize and a Pomodoro is
-        recorded once (ADR-0003).
+        recorded once (ADR-0003). A missing row cannot be locked, so a User's first request
+        inserts the Idle row first: a concurrent first request waits on that insert instead of
+        racing it to a duplicate-key error, and then locks the same row.
         """
+        self._ensure_row(user_id)
         row = self._session.get(TimerTable, user_id, with_for_update=True)
         return None if row is None else _to_entity(row)
+
+    def _ensure_row(self, user_id: UserId) -> None:
+        """Insert `user_id`'s Idle Timer row unless one exists, without committing."""
+        dialect = self._session.get_bind().dialect.name
+        insert = postgresql_insert if dialect == "postgresql" else sqlite_insert
+        self._session.execute(
+            insert(TimerTable)
+            .values(user_id=user_id, phase=TimerPhase.IDLE.value)
+            .on_conflict_do_nothing(index_elements=["user_id"])
+        )
 
     def save(self, user_id: UserId, timer: Timer) -> None:
         """Upsert `user_id`'s Timer, keeping one durable row per User."""
