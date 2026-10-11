@@ -27,7 +27,10 @@ WORKDIR /app
 COPY --from=build --chown=node:node /app/.next/standalone ./
 COPY --from=build --chown=node:node /app/.next/static ./.next/static
 COPY --from=build --chown=node:node /app/public ./public
+COPY --from=build --chown=node:node /app/edge/stamp-client-address.cjs ./edge/stamp-client-address.cjs
 
 USER 1000
 EXPOSE 3000
-CMD ["node", "server.js"]
+# The preload stamps X-Forwarded-For with the socket address before Next sees the request, so the
+# backend's login rate limit keys on an IP the browser cannot choose (edge/stamp-client-address.cjs).
+CMD ["node", "--require", "./edge/stamp-client-address.cjs", "server.js"]

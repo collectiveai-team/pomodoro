@@ -9,9 +9,10 @@ startup. See the `TC001`/`TC002`/`TC003` per-file-ignore for this path in `pypro
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, Response
 
 from pomodoro.api.v1.auth.dependencies import (
+    get_client_ip,
     get_current_session,
     get_current_user,
     get_rate_limiter,
@@ -61,10 +62,6 @@ def _user_response(user: User) -> UserResponse:
     )
 
 
-def _client_ip(request: Request) -> str:
-    return request.client.host if request.client else "unknown"
-
-
 def _set_session_cookie(response: Response, raw_token: str) -> None:
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
@@ -80,12 +77,12 @@ def _set_session_cookie(response: Response, raw_token: str) -> None:
 @router.post("/register", status_code=201)
 def register(
     payload: RegisterRequest,
-    request: Request,
     response: Response,
     clock: Clock = Depends(get_clock),
     user_repository: UserRepository = Depends(get_user_repository),
     auth_session_repository: AuthSessionRepository = Depends(get_auth_session_repository),
     rate_limiter: RateLimiter = Depends(get_rate_limiter),
+    caller_ip: str = Depends(get_client_ip),
 ) -> UserResponse:
     """Create a User, auto-log them in, and set the session cookie.
 
@@ -93,7 +90,7 @@ def register(
     successful one does not.
     """
     now = clock.now()
-    key = rate_limit_key(_client_ip(request), payload.email)
+    key = rate_limit_key(caller_ip, payload.email)
     rate_limiter.check(key, now)
     try:
         registered = register_user(
@@ -114,12 +111,12 @@ def register(
 @router.post("/login")
 def login(
     payload: LoginRequest,
-    request: Request,
     response: Response,
     clock: Clock = Depends(get_clock),
     user_repository: UserRepository = Depends(get_user_repository),
     auth_session_repository: AuthSessionRepository = Depends(get_auth_session_repository),
     rate_limiter: RateLimiter = Depends(get_rate_limiter),
+    caller_ip: str = Depends(get_client_ip),
 ) -> UserResponse:
     """Verify credentials and log the User in with a fresh session.
 
@@ -127,7 +124,7 @@ def login(
     successful one does not.
     """
     now = clock.now()
-    key = rate_limit_key(_client_ip(request), payload.email)
+    key = rate_limit_key(caller_ip, payload.email)
     rate_limiter.check(key, now)
     try:
         authenticated = login_user(

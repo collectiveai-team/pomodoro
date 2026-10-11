@@ -24,12 +24,11 @@ COPY backend/pomodoro ./backend/pomodoro
 RUN useradd --system --no-create-home --uid 10001 app
 USER 10001
 
-# The backend is only reachable through the frontend rewrite, which sets X-Forwarded-For; trust
-# private ranges so request.client.host is the real client (login rate limit keys on IP + email).
-ENV FORWARDED_ALLOW_IPS="127.0.0.1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
-
 EXPOSE 8000
 HEALTHCHECK --interval=10s --timeout=3s --start-period=10s --retries=5 \
     CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')"]
 
-CMD ["uvicorn", "pomodoro.entrypoints.app:app", "--host", "0.0.0.0", "--port", "8000"]
+# The backend is only reachable through the frontend rewrite. The app resolves the client IP for
+# the login rate limit itself, from the entry that proxy appends to X-Forwarded-For
+# (api/v1/auth/client_ip.py), so uvicorn must not rewrite request.client from that header.
+CMD ["uvicorn", "pomodoro.entrypoints.app:app", "--host", "0.0.0.0", "--port", "8000", "--no-proxy-headers"]

@@ -30,6 +30,11 @@ class Settings(BaseSettings):
     # ADR-0002: SQLite locally, PostgreSQL in production, both via the same engine code path
     # (`pomodoro.database.engine.build_engine`).
     database_url: str = Field(default="sqlite:///backend/.tmp/pomodoro.db")
+    # Peers allowed to report the client IP in `X-Forwarded-For`: the frontend rewrite, which
+    # reaches the backend over a private network (see `api/v1/auth/client_ip.py`).
+    trusted_proxy_cidrs: list[str] = Field(
+        default=["127.0.0.0/8", "::1/128", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
+    )
 
 
 @lru_cache
