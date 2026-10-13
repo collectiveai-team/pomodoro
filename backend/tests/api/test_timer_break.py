@@ -103,7 +103,7 @@ def test_fifth_completed_pomodoro_offers_a_long_break(
     assert started_break.json()["break_kind"] == "long"
     assert started_break.json()["remaining_seconds"] == 10 * 60
     assert started_break.json()["pomodoros_completed_today"] == 5
-    assert started_break.json()["pomodoros_until_long_break"] == 0
+    assert started_break.json()["pomodoros_until_long_break"] == 5
 
 
 def test_break_pause_resume_skip_and_stale_actions_return_current_timer(

@@ -107,6 +107,7 @@ def snapshot(
             pomodoros=pomodoro_repository.list_for_user(user_id),
             now=now,
             time_zone=time_zone,
+            phase=timer.phase,
         ),
     )
 

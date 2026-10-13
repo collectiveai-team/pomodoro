@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
-from pomodoro.core.timer import Pomodoro, PomodoroStatus
+from pomodoro.core.timer import Pomodoro, PomodoroStatus, TimerPhase
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -28,7 +28,20 @@ def completed_pomodoro_count(pomodoros: Iterable[Pomodoro]) -> int:
     return sum(pomodoro.status is PomodoroStatus.COMPLETED for pomodoro in pomodoros)
 
 
-def summarize_day(*, pomodoros: Iterable[Pomodoro], now: datetime, time_zone: str) -> DailySummary:
+def pomodoros_until_long_break(completed: int, phase: TimerPhase) -> int:
+    """Return how many more Pomodoros precede the next long Break.
+
+    Right after a Pomodoro completes (ReadyForNext) the long Break may be due now, so the count
+    reaches 0. In every other phase it counts 5..1 toward the long Break.
+    """
+    if phase is TimerPhase.READY_FOR_NEXT:
+        return (-completed) % LONG_BREAK_CADENCE
+    return LONG_BREAK_CADENCE - completed % LONG_BREAK_CADENCE
+
+
+def summarize_day(
+    *, pomodoros: Iterable[Pomodoro], now: datetime, time_zone: str, phase: TimerPhase
+) -> DailySummary:
     """Summarize completed Pomodoros on `now`'s local day and until a long Break."""
     zone = ZoneInfo(time_zone)
     local_day = now.astimezone(zone).date()
@@ -40,5 +53,5 @@ def summarize_day(*, pomodoros: Iterable[Pomodoro], now: datetime, time_zone: st
     )
     return DailySummary(
         pomodoros_completed_today=completed_today,
-        pomodoros_until_long_break=(-len(completed)) % LONG_BREAK_CADENCE,
+        pomodoros_until_long_break=pomodoros_until_long_break(len(completed), phase),
     )
