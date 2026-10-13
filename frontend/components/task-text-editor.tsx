@@ -1,9 +1,10 @@
 "use client";
 
-import { type FocusEvent, type FormEvent, type KeyboardEvent, useState } from "react";
+import { type FormEvent, useState } from "react";
 import { apiClient } from "@/lib/api-client";
 import { toApiError } from "@/lib/api-error";
 import { redirectToLoginOn401 } from "@/lib/http-session";
+import { inlineEditHandlers } from "@/lib/inline-edit-handlers";
 
 interface TaskTextEditorProps {
   taskId: string;
@@ -41,21 +42,10 @@ export function TaskTextEditor({ taskId, text, onSaved, onCancel }: TaskTextEdit
     onSaved();
   }
 
-  function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      onCancel();
-    }
-  }
-
-  function handleBlur(event: FocusEvent<HTMLFormElement>) {
-    if (!event.currentTarget.contains(event.relatedTarget)) {
-      onCancel();
-    }
-  }
+  const { onKeyDown, onBlur } = inlineEditHandlers(onCancel);
 
   return (
-    <form onSubmit={handleSubmit} onBlur={handleBlur} className="flex flex-1 flex-col gap-1">
+    <form onSubmit={handleSubmit} onBlur={onBlur} className="flex flex-1 flex-col gap-1">
       <div className="flex gap-2">
         <input
           type="text"
@@ -64,7 +54,7 @@ export function TaskTextEditor({ taskId, text, onSaved, onCancel }: TaskTextEdit
           aria-label="Editar texto de la tarea"
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={handleKeyDown}
+          onKeyDown={onKeyDown}
           disabled={saving}
           className="field-input"
         />

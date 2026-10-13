@@ -17,6 +17,7 @@ import { useTaskList } from "@/lib/use-task-list";
 import { createDragEndHandler, useTaskReorderSensors } from "@/lib/use-task-reorder";
 import { useTimerPhase } from "@/lib/use-timer-phase";
 import { HistoryPanel } from "./history-panel";
+import { TagManager } from "./tag-manager";
 import { TaskFilter } from "./task-filter";
 import { TaskRow, type TaskRowProps } from "./task-row";
 
@@ -71,6 +72,15 @@ export function TasksPanel() {
   function refetchBoth() {
     refetchActive();
     refetchArchived();
+  }
+
+  function dropDeletedTag(tagId: string) {
+    const without = (filter: TaskFilterState) => ({
+      ...filter,
+      selectedTags: filter.selectedTags.filter((selected) => selected !== tagId),
+    });
+    setActiveFilter(without);
+    setArchivedFilter(without);
   }
 
   async function handleCreateTask(event: FormEvent<HTMLFormElement>) {
@@ -158,6 +168,16 @@ export function TasksPanel() {
     );
   }
 
+  function sharedRowProps(taskId: string) {
+    return {
+      tagsById,
+      pending: pendingTaskId === taskId,
+      isCurrent: isTimerTask(timerPhase, timerTaskId, taskId),
+      onTextSaved: handleTextSaved,
+      onTagsSaved: refetchBoth,
+    };
+  }
+
   function handleTextSaved(taskId: string) {
     refetchBoth();
     if (isTimerTask(timerPhase, timerTaskId, taskId)) {
@@ -216,6 +236,8 @@ export function TasksPanel() {
         </button>
       </div>
 
+      <TagManager tags={tags} onChanged={refetchBoth} onDeleted={dropDeletedTag} />
+
       {actionError ? (
         <p role="alert" className="text-sm text-red-600">
           {actionError}
@@ -262,11 +284,7 @@ export function TasksPanel() {
                   <SortableTaskRow
                     key={task.id}
                     task={task}
-                    tagsById={tagsById}
-                    pending={pendingTaskId === task.id}
-                    isCurrent={isTimerTask(timerPhase, timerTaskId, task.id)}
-                    onTextSaved={handleTextSaved}
-                    onTagsSaved={refetchBoth}
+                    {...sharedRowProps(task.id)}
                     actions={{
                       variant: "active",
                       startDisabled: isTaskStartDisabled(timerPhase),
@@ -295,11 +313,7 @@ export function TasksPanel() {
               <TaskRow
                 key={task.id}
                 task={task}
-                tagsById={tagsById}
-                pending={pendingTaskId === task.id}
-                isCurrent={isTimerTask(timerPhase, timerTaskId, task.id)}
-                onTextSaved={handleTextSaved}
-                onTagsSaved={refetchBoth}
+                {...sharedRowProps(task.id)}
                 actions={{
                   variant: "archived",
                   onUnarchive: handleUnarchive,

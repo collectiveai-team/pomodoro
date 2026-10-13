@@ -2,6 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { components } from "@/lib/api/schema";
+import { IDLE_TIMER, makeTask } from "./task-fixtures";
 import { TasksPanel } from "./tasks-panel";
 
 type TaskResponseBody = components["schemas"]["TaskResponse"];
@@ -21,18 +22,6 @@ function ok(status = 200): Response {
   return { status } as Response;
 }
 
-function makeTask(id: string, text: string, tagIds: string[] = []): TaskResponseBody {
-  return {
-    id,
-    text,
-    position: 0,
-    tag_ids: tagIds,
-    created_at: "2026-01-01T00:00:00Z",
-    archived_at: null,
-    deletable: true,
-  };
-}
-
 /** In-memory server: PATCH tags creates missing Tags by normalized name and rewrites the Task. */
 function setupServer(tasks: TaskResponseBody[], tags: TagResponseBody[]) {
   getMock.mockImplementation((path: string) => {
@@ -41,18 +30,7 @@ function setupServer(tasks: TaskResponseBody[], tags: TagResponseBody[]) {
       path === "/api/v1/tags"
         ? { tags: [...tags] }
         : path === "/api/v1/timer"
-          ? {
-              phase: "Idle",
-              task: null,
-              break_kind: null,
-              phase_started_at: null,
-              accumulated_active_seconds: 0,
-              running_since: null,
-              server_now: "2026-01-01T00:00:00Z",
-              remaining_seconds: null,
-              pomodoros_completed_today: 0,
-              pomodoros_until_long_break: 4,
-            }
+          ? { ...IDLE_TIMER }
           : { tasks: tasks.map((task) => ({ ...task })), ...counts };
     return Promise.resolve({ data, error: undefined, response: ok() });
   });
