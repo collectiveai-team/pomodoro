@@ -11,6 +11,7 @@ import { redirectToLoginOn401 } from "@/lib/http-session";
 import { EMPTY_TASK_FILTER, type TaskFilterState } from "@/lib/task-filter";
 import { isTaskStartDisabled } from "@/lib/task-start";
 import { broadcastTimerChanged } from "@/lib/timer-sync";
+import { isTimerTask } from "@/lib/timer-task";
 import { useTagCatalog } from "@/lib/use-tag-catalog";
 import { useTaskList } from "@/lib/use-task-list";
 import { createDragEndHandler, useTaskReorderSensors } from "@/lib/use-task-reorder";
@@ -63,7 +64,7 @@ export function TasksPanel() {
 
   const [activeState, refetchActive] = useTaskList("active", activeFilter);
   const [archivedState, refetchArchived] = useTaskList("archived", archivedFilter);
-  const { phase: timerPhase, setPhase: setTimerPhase } = useTimerPhase();
+  const { phase: timerPhase, taskId: timerTaskId, setPhase: setTimerPhase } = useTimerPhase();
 
   const tagsById = useMemo(() => new Map(tags.map((tag) => [tag.id, tag])), [tags]);
 
@@ -256,6 +257,7 @@ export function TasksPanel() {
                     task={task}
                     tagsById={tagsById}
                     pending={pendingTaskId === task.id}
+                    isCurrent={isTimerTask(timerPhase, timerTaskId, task.id)}
                     actions={{
                       variant: "active",
                       startDisabled: isTaskStartDisabled(timerPhase),
@@ -286,6 +288,7 @@ export function TasksPanel() {
                 task={task}
                 tagsById={tagsById}
                 pending={pendingTaskId === task.id}
+                isCurrent={isTimerTask(timerPhase, timerTaskId, task.id)}
                 actions={{
                   variant: "archived",
                   onUnarchive: handleUnarchive,

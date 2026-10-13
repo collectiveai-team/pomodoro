@@ -34,17 +34,31 @@ export interface TaskRowProps {
   tagsById: ReadonlyMap<string, TagResponseBody>;
   pending: boolean;
   actions: TaskRowActions;
+  /** True while the Timer holds this Task (Story 48): highlighted and `aria-current`. */
+  isCurrent?: boolean;
   /** Present only for a draggable (Active-tab) row; the dnd-kit wiring lives in the orchestrator. */
   dragHandle?: DragHandleProps;
 }
 
 /** One Task row: handle, text, Tag chips, and the per-tab action set (Stories 22, 24-31, 46-47). */
-export function TaskRow({ task, tagsById, pending, actions, dragHandle }: TaskRowProps) {
+export function TaskRow({
+  task,
+  tagsById,
+  pending,
+  actions,
+  isCurrent = false,
+  dragHandle,
+}: TaskRowProps) {
   return (
     <li
       ref={dragHandle?.setNodeRef}
       style={dragHandle?.style}
-      className="flex items-center gap-2 rounded-lg border border-ink/15 p-2"
+      aria-current={isCurrent ? "true" : undefined}
+      className={`flex items-center gap-2 rounded-lg border p-2 ${
+        isCurrent
+          ? "border-accent bg-accent/10 ring-2 ring-accent dark:bg-accent/20"
+          : "border-ink/15"
+      }`}
     >
       {dragHandle ? (
         <button
