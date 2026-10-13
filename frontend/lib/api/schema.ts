@@ -806,7 +806,7 @@ export interface components {
         };
         /**
          * StartTimerRequest
-         * @description Start a Pomodoro only when the client's Timer phase is still Idle.
+         * @description Start a Pomodoro from the Idle or ReadyForNext phase the client last saw.
          */
         StartTimerRequest: {
             /**
@@ -895,6 +895,7 @@ export interface components {
         TimerResponse: {
             phase: components["schemas"]["TimerPhase"];
             task: components["schemas"]["InProgressTaskResponse"] | null;
+            /** @description Kind of the running Break, or in ReadyForNext the kind starting a Break would begin (long on every fifth completed Pomodoro). Null in Idle, Pomodoro and AskingToLog. */
             break_kind: components["schemas"]["BreakKind"] | null;
             /** Phase Started At */
             phase_started_at: string | null;
@@ -916,15 +917,17 @@ export interface components {
         };
         /**
          * UpdateSettingsRequest
-         * @description Full-replace Settings payload: Alarm, notifications, and time zone.
+         * @description Partial Settings payload: only the sent fields change; omitted ones keep their value.
+         *
+         *     At least one field is required, and a sent field may not be null.
          */
         UpdateSettingsRequest: {
             /** Alarm Enabled */
-            alarm_enabled: boolean;
+            alarm_enabled?: boolean | null;
             /** Notifications Enabled */
-            notifications_enabled: boolean;
+            notifications_enabled?: boolean | null;
             /** Time Zone */
-            time_zone: string;
+            time_zone?: string | null;
         };
         /**
          * UpdateTaskRequest
