@@ -79,3 +79,16 @@ def test_register_rejects_a_password_longer_than_128_characters(client: TestClie
 
     assert response.status_code == 422
     assert response.json()["code"] == "invalid_password_length"
+
+
+def test_register_rejects_an_invalid_time_zone_and_stores_no_user(client: TestClient) -> None:
+    response = client.post(REGISTER_URL, json=_payload(time_zone="Nope/Nope"))
+
+    assert response.status_code == 422
+    assert response.json()["code"] == "invalid_time_zone"
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"email": "visitor@example.com", "password": "correct-horse-battery-staple"},
+    )
+    assert login.status_code != 200
+    assert "session" not in response.cookies

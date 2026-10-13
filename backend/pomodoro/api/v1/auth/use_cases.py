@@ -25,6 +25,7 @@ from pomodoro.core.users import (
     normalize_email,
     validate_email_format,
     validate_password_length,
+    validate_time_zone,
 )
 
 if TYPE_CHECKING:
@@ -63,6 +64,7 @@ def register_user(
     if user_repository.get_by_email_key(email_key) is not None:
         raise DuplicateEmailError(f"'{email}' is already registered.")
     validate_password_length(password)
+    validate_time_zone(time_zone)
 
     now = clock.now()
     user = User(
