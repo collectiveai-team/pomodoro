@@ -7,8 +7,8 @@ test("register, create a Task, start and pause a Pomodoro, reload, logout", asyn
 
   await page.goto("/register");
   await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill("correct-horse-battery-staple");
-  await page.getByRole("button", { name: "Create account" }).click();
+  await page.getByLabel("Contraseña").fill("correct-horse-battery-staple");
+  await page.getByRole("button", { name: "Crear cuenta" }).click();
   await expect(page).toHaveURL(/\/$/);
 
   await page.getByLabel("Nueva tarea").fill(taskText);

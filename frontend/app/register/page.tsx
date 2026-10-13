@@ -17,14 +17,14 @@ export default function RegisterPage() {
   return (
     <main className="flex min-h-screen items-center justify-center p-6">
       <AuthForm
-        title="Register"
-        submitLabel="Create account"
+        title="Crear cuenta"
+        submitLabel="Crear cuenta"
         onSubmit={handleSubmit}
         footer={
           <p className="text-sm">
-            Already have an account?{" "}
+            ¿Ya tienes cuenta?{" "}
             <Link href="/login" className="underline">
-              Log in
+              Inicia sesión
             </Link>
           </p>
         }

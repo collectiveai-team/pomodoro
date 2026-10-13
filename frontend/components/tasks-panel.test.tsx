@@ -167,7 +167,7 @@ describe("TasksPanel — create on Enter", () => {
     await user.type(input, "Ship it{Enter}");
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "A Task with this text already exists: 'Ship it'.",
+      "Ya existe una tarea activa con ese texto.",
     );
     expect(input).toHaveValue("Ship it");
   });
@@ -186,7 +186,9 @@ describe("TasksPanel — create on Enter", () => {
     await user.click(input);
     await user.keyboard("{Enter}");
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Task text cannot be empty.");
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "El texto de la tarea no puede estar vacío.",
+    );
   });
 });
 
@@ -244,7 +246,7 @@ describe("TasksPanel — Archived tab", () => {
     await user.click(await screen.findByRole("button", { name: "Desarchivar" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "An Active Task with this text already exists: 'Ship the release'.",
+      "Ya existe una tarea activa con ese texto.",
     );
   });
 });

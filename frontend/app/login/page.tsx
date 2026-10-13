@@ -16,14 +16,14 @@ export default function LoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center p-6">
       <AuthForm
-        title="Log in"
-        submitLabel="Log in"
+        title="Iniciar sesión"
+        submitLabel="Iniciar sesión"
         onSubmit={handleSubmit}
         footer={
           <p className="text-sm">
-            No account yet?{" "}
+            ¿Aún no tienes cuenta?{" "}
             <Link href="/register" className="underline">
-              Register
+              Regístrate
             </Link>
           </p>
         }

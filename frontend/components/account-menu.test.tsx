@@ -112,7 +112,7 @@ describe("AccountMenu — change password (Story 9)", () => {
     await user.type(screen.getByLabelText("Contraseña nueva"), "new-pass-123");
     await user.click(screen.getByRole("button", { name: "Guardar" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("email o contraseña incorrectos");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Email o contraseña incorrectos.");
   });
 });
 
@@ -127,7 +127,7 @@ describe("AccountMenu — change time zone (Story 5)", () => {
     await renderAndOpenSubView(user, "Cambiar zona horaria");
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "No se pudo cargar la configuración.",
+      "Algo salió mal. Inténtalo de nuevo.",
     );
     expect(screen.queryByText("Cargando…")).not.toBeInTheDocument();
   });
@@ -173,9 +173,7 @@ describe("AccountMenu — change time zone (Story 5)", () => {
     await user.type(input, "Nowhere");
     await user.click(screen.getByRole("button", { name: "Guardar" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "'Nowhere' is not a valid IANA time zone.",
-    );
+    expect(await screen.findByRole("alert")).toHaveTextContent("La zona horaria no es válida.");
   });
 });
 
@@ -210,7 +208,7 @@ describe("AccountMenu — delete account (Story 10)", () => {
     await user.type(screen.getByLabelText("Contraseña"), "wrong");
     await user.click(screen.getByRole("button", { name: "Borrar cuenta" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("email o contraseña incorrectos");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Email o contraseña incorrectos.");
   });
 });
 

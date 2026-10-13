@@ -1,6 +1,7 @@
 "use client";
 
 import { type FormEvent, type ReactNode, useState } from "react";
+import { GENERIC_ERROR_MESSAGE } from "@/lib/api-error";
 
 export interface AuthFormProps {
   title: string;
@@ -23,7 +24,7 @@ export function AuthForm({ title, submitLabel, onSubmit, footer }: AuthFormProps
     try {
       await onSubmit(email, password);
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Something went wrong.");
+      setError(submitError instanceof Error ? submitError.message : GENERIC_ERROR_MESSAGE);
     } finally {
       setSubmitting(false);
     }
@@ -45,7 +46,7 @@ export function AuthForm({ title, submitLabel, onSubmit, footer }: AuthFormProps
         />
       </label>
       <label className="flex flex-col gap-1 text-sm" htmlFor="password">
-        Password
+        Contraseña
         <input
           id="password"
           type="password"
