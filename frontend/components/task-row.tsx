@@ -3,6 +3,7 @@
 import type { DraggableAttributes, DraggableSyntheticListeners } from "@dnd-kit/core";
 import { type CSSProperties, useState } from "react";
 import type { components } from "@/lib/api/schema";
+import { TaskTagEditor } from "./task-tag-editor";
 import { TaskTextEditor } from "./task-text-editor";
 
 type TaskResponseBody = components["schemas"]["TaskResponse"];
@@ -39,6 +40,8 @@ export interface TaskRowProps {
   isCurrent?: boolean;
   /** Called after the Task's text was edited successfully (Story 21). */
   onTextSaved?: (taskId: string) => void;
+  /** Called after the Task's Tags were saved (Stories 32, 35). */
+  onTagsSaved: (taskId: string) => void;
   /** Present only for a draggable (Active-tab) row; the dnd-kit wiring lives in the orchestrator. */
   dragHandle?: DragHandleProps;
 }
@@ -51,6 +54,7 @@ export function TaskRow({
   actions,
   isCurrent = false,
   onTextSaved,
+  onTagsSaved,
   dragHandle,
 }: TaskRowProps) {
   const [editing, setEditing] = useState(false);
@@ -100,15 +104,7 @@ export function TaskRow({
           </button>
         </>
       )}
-      {task.tag_ids.length > 0 ? (
-        <span className="flex flex-wrap gap-1">
-          {task.tag_ids.map((tagId) => (
-            <span key={tagId} className="rounded-full bg-accent/15 px-2 py-0.5 text-xs">
-              {tagsById.get(tagId)?.name ?? tagId}
-            </span>
-          ))}
-        </span>
-      ) : null}
+      <TaskTagEditor task={task} tagsById={tagsById} disabled={pending} onSaved={onTagsSaved} />
       {actions.variant === "active" ? (
         <>
           <button

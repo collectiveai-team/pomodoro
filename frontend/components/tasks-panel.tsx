@@ -266,6 +266,7 @@ export function TasksPanel() {
                     pending={pendingTaskId === task.id}
                     isCurrent={isTimerTask(timerPhase, timerTaskId, task.id)}
                     onTextSaved={handleTextSaved}
+                    onTagsSaved={refetchBoth}
                     actions={{
                       variant: "active",
                       startDisabled: isTaskStartDisabled(timerPhase),
@@ -298,6 +299,7 @@ export function TasksPanel() {
                 pending={pendingTaskId === task.id}
                 isCurrent={isTimerTask(timerPhase, timerTaskId, task.id)}
                 onTextSaved={handleTextSaved}
+                onTagsSaved={refetchBoth}
                 actions={{
                   variant: "archived",
                   onUnarchive: handleUnarchive,

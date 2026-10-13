@@ -7,7 +7,15 @@ import { redirectToLoginOn401 } from "@/lib/http-session";
 
 type TagResponseBody = components["schemas"]["TagResponse"];
 
-/** The caller's Tag catalog, shared by every filter UI (Tasks' two tabs, T22; History, T23). */
+/** Window event telling every mounted catalog consumer to reload (Tag created/renamed/deleted). */
+export const TAG_CATALOG_CHANGED_EVENT = "pomodoro:tag-catalog-changed";
+
+/** Refreshes every mounted `useTagCatalog` after a Tag mutation (Task Tag editor; Tag manager, T13). */
+export function refreshTagCatalog(): void {
+  window.dispatchEvent(new Event(TAG_CATALOG_CHANGED_EVENT));
+}
+
+/** The caller's Tag catalog, shared by every filter UI and Tag editor; reloads on `refreshTagCatalog`. */
 export function useTagCatalog(): TagResponseBody[] {
   const [tags, setTags] = useState<TagResponseBody[]>([]);
 
@@ -24,8 +32,11 @@ export function useTagCatalog(): TagResponseBody[] {
       setTags(data?.tags ?? []);
     }
     void load();
+    const onChanged = () => void load();
+    window.addEventListener(TAG_CATALOG_CHANGED_EVENT, onChanged);
     return () => {
       cancelled = true;
+      window.removeEventListener(TAG_CATALOG_CHANGED_EVENT, onChanged);
     };
   }, []);
 
