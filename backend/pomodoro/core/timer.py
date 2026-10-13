@@ -167,8 +167,8 @@ def settle(timer: Timer, now: datetime) -> TimerSettlement:
 
 
 def start(timer: Timer, *, task_id: TaskId, now: datetime) -> Timer:
-    """Start a new Pomodoro for `task_id` from Idle."""
-    _require_phase(timer, "start", TimerPhase.IDLE)
+    """Start a Pomodoro for `task_id` from Idle or ReadyForNext, with no Break (ADR-0005)."""
+    _require_phase(timer, "start", TimerPhase.IDLE, TimerPhase.READY_FOR_NEXT)
     return Timer(
         phase=TimerPhase.POMODORO_RUNNING,
         task_id=task_id,

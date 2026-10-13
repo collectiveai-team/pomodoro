@@ -10,7 +10,7 @@ from pomodoro.core.timer import TimerPhase
 
 
 class StartTimerRequest(BaseModel):
-    """Start a Pomodoro only when the client's Timer phase is still Idle."""
+    """Start a Pomodoro from the Idle or ReadyForNext phase the client last saw."""
 
     model_config = ConfigDict(extra="forbid")
 
