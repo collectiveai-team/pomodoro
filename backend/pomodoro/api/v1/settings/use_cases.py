@@ -21,24 +21,31 @@ log = get_logger(__name__)
 def update_settings(
     *,
     user: User,
-    alarm_enabled: bool,
-    notifications_enabled: bool,
-    time_zone: str,
+    alarm_enabled: bool | None,
+    notifications_enabled: bool | None,
+    time_zone: str | None,
     user_repository: UserRepository,
 ) -> User:
-    """Validate `time_zone` and persist the caller's preferences, returning the updated User."""
-    validate_time_zone(time_zone)
+    """Merge the sent preferences over the stored ones and persist them, returning the User.
+
+    `None` means "not sent": the stored value is kept. A sent `time_zone` is validated first.
+    """
+    if time_zone is not None:
+        validate_time_zone(time_zone)
+    updated = replace(
+        user,
+        alarm_enabled=user.alarm_enabled if alarm_enabled is None else alarm_enabled,
+        notifications_enabled=(
+            user.notifications_enabled if notifications_enabled is None else notifications_enabled
+        ),
+        time_zone=user.time_zone if time_zone is None else time_zone,
+    )
     user_repository.update_preferences(
         user.id,
-        alarm_enabled=alarm_enabled,
-        notifications_enabled=notifications_enabled,
-        time_zone=time_zone,
+        alarm_enabled=updated.alarm_enabled,
+        notifications_enabled=updated.notifications_enabled,
+        time_zone=updated.time_zone,
     )
 
     log.info("settings_updated", user_id=str(user.id))
-    return replace(
-        user,
-        alarm_enabled=alarm_enabled,
-        notifications_enabled=notifications_enabled,
-        time_zone=time_zone,
-    )
+    return updated

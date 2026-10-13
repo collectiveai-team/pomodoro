@@ -119,3 +119,63 @@ def test_settings_are_scoped_per_user(client: TestClient) -> None:
         "notifications_enabled": False,
         "time_zone": "America/Argentina/Buenos_Aires",
     }
+
+
+_DEFAULTS = {
+    "alarm_enabled": True,
+    "notifications_enabled": False,
+    "time_zone": "America/Argentina/Buenos_Aires",
+}
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("alarm_enabled", False),
+        ("notifications_enabled", True),
+        ("time_zone", "Europe/Berlin"),
+    ],
+)
+def test_partial_update_changes_only_the_sent_field(
+    client: TestClient, field: str, value: bool | str
+) -> None:
+    _register(client)
+
+    response = client.patch(SETTINGS_URL, json={field: value})
+
+    assert response.status_code == 200
+    expected = {**_DEFAULTS, field: value}
+    assert response.json() == expected
+    assert client.get(SETTINGS_URL).json() == expected
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {},
+        {"unknown": 1},
+        {"alarm_enabled": None},
+        {"notifications_enabled": None},
+        {"time_zone": None},
+        {"alarm_enabled": False, "time_zone": None},
+    ],
+)
+def test_update_rejects_empty_unknown_or_null_payloads(
+    client: TestClient, body: dict[str, object]
+) -> None:
+    _register(client)
+
+    response = client.patch(SETTINGS_URL, json=body)
+
+    assert response.status_code == 422
+    assert client.get(SETTINGS_URL).json() == _DEFAULTS
+
+
+def test_partial_update_with_invalid_time_zone_is_rejected(client: TestClient) -> None:
+    _register(client)
+
+    response = client.patch(SETTINGS_URL, json={"time_zone": "Not/AZone"})
+
+    assert response.status_code == 422
+    assert response.json()["code"] == "invalid_time_zone"
+    assert client.get(SETTINGS_URL).json() == _DEFAULTS
