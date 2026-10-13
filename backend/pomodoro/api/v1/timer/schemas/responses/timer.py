@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from pomodoro.core.timer import BreakKind, TimerPhase
 
@@ -26,7 +26,12 @@ class TimerResponse(BaseModel):
 
     phase: TimerPhase
     task: InProgressTaskResponse | None
-    break_kind: BreakKind | None
+    break_kind: BreakKind | None = Field(
+        description=(
+            "Kind of the running Break, or in ReadyForNext the kind starting a Break would begin "
+            "(long on every fifth completed Pomodoro). Null in Idle, Pomodoro and AskingToLog."
+        ),
+    )
     phase_started_at: datetime | None
     accumulated_active_seconds: int
     running_since: datetime | None

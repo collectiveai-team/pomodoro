@@ -79,7 +79,7 @@ def timer_response(snapshot: TimerSnapshot) -> TimerResponse:
     return TimerResponse(
         phase=snapshot.timer.phase,
         task=None if task is None else InProgressTaskResponse(id=task.id, text=task.text),
-        break_kind=snapshot.timer.break_kind,
+        break_kind=snapshot.break_kind,
         phase_started_at=snapshot.timer.phase_started_at,
         accumulated_active_seconds=snapshot.timer.accumulated_active_seconds,
         running_since=snapshot.timer.running_since,

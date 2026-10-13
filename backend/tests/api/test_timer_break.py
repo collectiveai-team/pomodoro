@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 from pomodoro.database.models.pomodoro import PomodoroTable
+from pomodoro.database.models.timer import TimerTable
 from sqlmodel import Session, select
 
 if TYPE_CHECKING:
@@ -180,3 +181,103 @@ def test_daily_summary_counts_a_pomodoro_ending_at_local_midnight(
     assert summary.json()["server_now"] == "2026-01-01T11:00:00Z"
     assert summary.json()["pomodoros_completed_today"] == 1
     assert summary.json()["pomodoros_until_long_break"] == 4
+
+
+def _timer_row(db_engine: Engine) -> TimerTable:
+    with Session(db_engine) as session:
+        return TimerTable.model_validate(session.exec(select(TimerTable)).one().model_dump())
+
+
+def test_ready_for_next_reports_the_upcoming_break_kind(
+    client: TestClient, fake_clock: FakeClock
+) -> None:
+    """ReadyForNext previews the Break starting one would begin: short, then long on the 5th."""
+    _register(client, email="preview@example.com", time_zone="America/Argentina/Buenos_Aires")
+    task_id = _create_task(client, "Preview the Break")
+    _complete_pomodoro(client, fake_clock, task_id)
+
+    assert client.get("/api/v1/timer").json()["break_kind"] == "short"
+
+    for _ in range(2, 6):
+        _continue_completed_pomodoro(client, fake_clock)
+
+    after_fifth = client.get("/api/v1/timer").json()
+    assert after_fifth["phase"] == "ReadyForNext"
+    assert after_fifth["break_kind"] == "long"
+
+
+def test_ready_for_next_counts_pomodoros_until_the_long_break(
+    client: TestClient, fake_clock: FakeClock
+) -> None:
+    """GET /timer in ReadyForNext reports 4 left after the 1st Pomodoro and 0 after the 5th."""
+    _register(client, email="cadence@example.com", time_zone="America/Argentina/Buenos_Aires")
+    task_id = _create_task(client, "Count to the long Break")
+    _complete_pomodoro(client, fake_clock, task_id)
+
+    assert client.get("/api/v1/timer").json()["pomodoros_until_long_break"] == 4
+
+    for _ in range(2, 6):
+        _continue_completed_pomodoro(client, fake_clock)
+
+    assert client.get("/api/v1/timer").json()["pomodoros_until_long_break"] == 0
+
+
+def test_break_kind_is_null_in_idle_and_while_a_pomodoro_runs(
+    client: TestClient, fake_clock: FakeClock
+) -> None:
+    """Before any Break could start, the snapshot reports no Break kind."""
+    _register(client, email="nullkind@example.com", time_zone="America/Argentina/Buenos_Aires")
+    assert client.get("/api/v1/timer").json()["break_kind"] is None
+    task_id = _create_task(client, "Null kind")
+    started = client.post(
+        "/api/v1/timer/start", json={"task_id": task_id, "expected_phase": "Idle"}
+    )
+    assert started.json()["phase"] == "PomodoroRunning"
+    assert started.json()["break_kind"] is None
+    fake_clock.advance(timedelta(minutes=1))
+    assert client.get("/api/v1/timer").json()["break_kind"] is None
+
+
+def test_break_kind_is_null_in_asking_to_log(client: TestClient, fake_clock: FakeClock) -> None:
+    """A stopped Pomodoro awaiting a log decision has no upcoming Break kind."""
+    _register(client, email="asking@example.com", time_zone="America/Argentina/Buenos_Aires")
+    task_id = _create_task(client, "Stop early")
+    client.post("/api/v1/timer/start", json={"task_id": task_id, "expected_phase": "Idle"})
+    fake_clock.advance(timedelta(minutes=3))
+    stopped = client.post("/api/v1/timer/stop", json={"expected_phase": "PomodoroRunning"})
+    assert stopped.status_code == 200
+
+    current = client.get("/api/v1/timer").json()
+    assert current["phase"] == "AskingToLog"
+    assert current["break_kind"] is None
+
+
+def test_reading_ready_for_next_does_not_modify_the_stored_timer(
+    client: TestClient, fake_clock: FakeClock, db_engine: Engine
+) -> None:
+    """The previewed Break kind is derived per read; the persisted Timer row is untouched."""
+    _register(client, email="nomutate@example.com", time_zone="America/Argentina/Buenos_Aires")
+    task_id = _create_task(client, "Read only")
+    _complete_pomodoro(client, fake_clock, task_id)
+    before = _timer_row(db_engine)
+    assert before.phase == "ReadyForNext"
+    assert before.break_kind is None
+
+    assert client.get("/api/v1/timer").json()["break_kind"] == "short"
+
+    assert _timer_row(db_engine) == before
+
+
+def test_starting_the_break_after_a_preview_runs_the_previewed_kind(
+    client: TestClient, fake_clock: FakeClock
+) -> None:
+    """start-break still derives the kind itself and agrees with the preview."""
+    _register(client, email="startbreak@example.com", time_zone="America/Argentina/Buenos_Aires")
+    task_id = _create_task(client, "Preview then start")
+    _complete_pomodoro(client, fake_clock, task_id)
+    assert client.get("/api/v1/timer").json()["break_kind"] == "short"
+
+    running = client.post("/api/v1/timer/start-break", json={"expected_phase": "ReadyForNext"})
+
+    assert running.json()["phase"] == "BreakRunning"
+    assert running.json()["break_kind"] == "short"

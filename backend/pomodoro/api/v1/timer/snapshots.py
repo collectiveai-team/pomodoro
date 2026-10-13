@@ -5,15 +5,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from pomodoro.core.daily_summary import DailySummary, summarize_day
+from pomodoro.core.daily_summary import DailySummary, completed_pomodoro_count, summarize_day
 from pomodoro.core.timer import (
     BREAK_LONG_SECONDS,
     BREAK_SHORT_SECONDS,
     POMODORO_SECONDS,
+    BreakKind,
     PomodoroRepository,
     Timer,
     TimerPhase,
     active_seconds,
+    break_kind_for_completed_pomodoros,
 )
 
 if TYPE_CHECKING:
@@ -30,6 +32,7 @@ class TimerSnapshot:
     timer: Timer
     server_now: datetime
     task: Task | None
+    break_kind: BreakKind | None
     remaining_seconds: int | None
     daily_summary: DailySummary
 
@@ -98,18 +101,27 @@ def snapshot(
 ) -> TimerSnapshot:
     """Build the Timer view, including its caller-local daily summary."""
     task = None if timer.task_id is None else task_repository.get_by_id(user_id, timer.task_id)
+    pomodoros = pomodoro_repository.list_for_user(user_id)
     return TimerSnapshot(
         timer=timer,
         server_now=now,
         task=task,
+        break_kind=_break_kind(timer, completed_pomodoro_count(pomodoros)),
         remaining_seconds=_remaining_seconds(timer, now),
         daily_summary=summarize_day(
-            pomodoros=pomodoro_repository.list_for_user(user_id),
+            pomodoros=pomodoros,
             now=now,
             time_zone=time_zone,
             phase=timer.phase,
         ),
     )
+
+
+def _break_kind(timer: Timer, completed_count: int) -> BreakKind | None:
+    """Return the running Break's kind, or the kind a Break started now would begin."""
+    if timer.phase is TimerPhase.READY_FOR_NEXT:
+        return break_kind_for_completed_pomodoros(completed_count)
+    return timer.break_kind
 
 
 def _remaining_seconds(timer: Timer, now: datetime) -> int | None:
