@@ -1,8 +1,9 @@
 "use client";
 
 import type { DraggableAttributes, DraggableSyntheticListeners } from "@dnd-kit/core";
-import type { CSSProperties } from "react";
+import { type CSSProperties, useState } from "react";
 import type { components } from "@/lib/api/schema";
+import { TaskTextEditor } from "./task-text-editor";
 
 type TaskResponseBody = components["schemas"]["TaskResponse"];
 type TagResponseBody = components["schemas"]["TagResponse"];
@@ -36,6 +37,8 @@ export interface TaskRowProps {
   actions: TaskRowActions;
   /** True while the Timer holds this Task (Story 48): highlighted and `aria-current`. */
   isCurrent?: boolean;
+  /** Called after the Task's text was edited successfully (Story 21). */
+  onTextSaved?: (taskId: string) => void;
   /** Present only for a draggable (Active-tab) row; the dnd-kit wiring lives in the orchestrator. */
   dragHandle?: DragHandleProps;
 }
@@ -47,8 +50,10 @@ export function TaskRow({
   pending,
   actions,
   isCurrent = false,
+  onTextSaved,
   dragHandle,
 }: TaskRowProps) {
+  const [editing, setEditing] = useState(false);
   return (
     <li
       ref={dragHandle?.setNodeRef}
@@ -71,7 +76,30 @@ export function TaskRow({
           ⠿
         </button>
       ) : null}
-      <span className="flex-1">{task.text}</span>
+      {editing ? (
+        <TaskTextEditor
+          taskId={task.id}
+          text={task.text}
+          onCancel={() => setEditing(false)}
+          onSaved={() => {
+            setEditing(false);
+            onTextSaved?.(task.id);
+          }}
+        />
+      ) : (
+        <>
+          <span className="flex-1">{task.text}</span>
+          <button
+            type="button"
+            aria-label={`Editar ${task.text}`}
+            disabled={pending}
+            onClick={() => setEditing(true)}
+            className="btn-secondary"
+          >
+            ✎
+          </button>
+        </>
+      )}
       {task.tag_ids.length > 0 ? (
         <span className="flex flex-wrap gap-1">
           {task.tag_ids.map((tagId) => (

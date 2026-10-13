@@ -158,6 +158,13 @@ export function TasksPanel() {
     );
   }
 
+  function handleTextSaved(taskId: string) {
+    refetchBoth();
+    if (isTimerTask(timerPhase, timerTaskId, taskId)) {
+      broadcastTimerChanged();
+    }
+  }
+
   const sensors = useTaskReorderSensors();
 
   async function persistReorder(nextTaskIds: string[]) {
@@ -258,6 +265,7 @@ export function TasksPanel() {
                     tagsById={tagsById}
                     pending={pendingTaskId === task.id}
                     isCurrent={isTimerTask(timerPhase, timerTaskId, task.id)}
+                    onTextSaved={handleTextSaved}
                     actions={{
                       variant: "active",
                       startDisabled: isTaskStartDisabled(timerPhase),
@@ -289,6 +297,7 @@ export function TasksPanel() {
                 tagsById={tagsById}
                 pending={pendingTaskId === task.id}
                 isCurrent={isTimerTask(timerPhase, timerTaskId, task.id)}
+                onTextSaved={handleTextSaved}
                 actions={{
                   variant: "archived",
                   onUnarchive: handleUnarchive,
