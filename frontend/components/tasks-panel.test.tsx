@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { components } from "@/lib/api/schema";
 import { TasksPanel } from "./tasks-panel";
+import { TimerPanel } from "./timer-panel";
 
 type TaskResponseBody = components["schemas"]["TaskResponse"];
 type TimerResponseBody = components["schemas"]["TimerResponse"];
@@ -310,5 +311,39 @@ describe("TasksPanel — Historial tab", () => {
     await user.click(screen.getByRole("tab", { name: "Historial" }));
 
     expect(await screen.findByLabelText("Filtrar Historial")).toBeInTheDocument();
+  });
+});
+
+describe("TasksPanel — passive Timer phase changes", () => {
+  it("enables the Task ▶ when a passive refetch moves the Timer from Break to Idle", async () => {
+    setupFixture({ activeTasks: [makeTask()] });
+    let timer: TimerResponseBody = {
+      ...makeTimer("BreakRunning"),
+      remaining_seconds: 1,
+      break_kind: "short" as const,
+    };
+    const baseGet = getMock.getMockImplementation() as (path: string) => Promise<unknown>;
+    getMock.mockImplementation((path: string) => {
+      if (path === "/api/v1/timer") {
+        return Promise.resolve({ data: timer, error: undefined, response: ok() });
+      }
+      if (path === "/api/v1/settings") {
+        return Promise.resolve({ data: undefined, error: { detail: "x" }, response: ok() });
+      }
+      return baseGet(path);
+    });
+
+    render(
+      <>
+        <TimerPanel />
+        <TasksPanel />
+      </>,
+    );
+    const startButton = await screen.findByRole("button", { name: /Iniciar Pomodoro en/ });
+    expect(startButton).toBeDisabled();
+
+    timer = makeTimer("Idle");
+
+    await waitFor(() => expect(startButton).toBeEnabled(), { timeout: 4000 });
   });
 });

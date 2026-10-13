@@ -101,7 +101,8 @@ export function TasksPanel() {
       return;
     }
     if (response.status === 409 && error) {
-      setTimerPhase((error as components["schemas"]["TimerResponse"]).phase);
+      const conflict = error as components["schemas"]["TimerResponse"];
+      setTimerPhase(conflict.phase, conflict.task?.id ?? null);
       broadcastTimerChanged();
       return;
     }
@@ -109,7 +110,7 @@ export function TasksPanel() {
       setActionError(toApiError(error).message);
       return;
     }
-    setTimerPhase(data.phase);
+    setTimerPhase(data.phase, data.task?.id ?? null);
     broadcastTimerChanged();
   }
 

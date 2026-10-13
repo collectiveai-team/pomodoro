@@ -20,7 +20,7 @@ import {
   syncClock,
 } from "@/lib/countdown";
 import { redirectToLoginOn401 } from "@/lib/http-session";
-import { broadcastTimerChanged, TIMER_CHANGED_EVENT } from "@/lib/timer-sync";
+import { broadcastTimerChanged, snapshotFromEvent, TIMER_CHANGED_EVENT } from "@/lib/timer-sync";
 import { type TimerActionPath, TimerControls } from "./timer-controls";
 import { TimerRing } from "./timer-ring";
 
@@ -74,6 +74,9 @@ export function TimerPanel() {
       );
     }
     previousPhaseRef.current = timer.phase;
+    if (previousPhase && previousPhase !== timer.phase) {
+      broadcastTimerChanged({ phase: timer.phase, taskId: timer.task?.id ?? null });
+    }
     passiveRefetchTriggeredRef.current = false;
     setView({ timer, sync });
   }, []);
@@ -113,7 +116,6 @@ export function TimerPanel() {
         }
         if (response.status === 409 && actionError) {
           applySnapshot(actionError as TimerResponseBody, "action");
-          broadcastTimerChanged();
           return;
         }
         if (actionError || !data) {
@@ -121,7 +123,6 @@ export function TimerPanel() {
           return;
         }
         applySnapshot(data, "action");
-        broadcastTimerChanged();
       } finally {
         setPending(false);
       }
@@ -235,7 +236,11 @@ export function TimerPanel() {
 
   // Refetch when another panel on the same page changed the Timer (e.g. ▶ from the Task list).
   useEffect(() => {
-    function handleTimerChanged() {
+    function handleTimerChanged(event: Event) {
+      // Events carrying a snapshot are phase announcements (including this panel's own).
+      if (snapshotFromEvent(event)) {
+        return;
+      }
       void fetchTimer("passive");
     }
     window.addEventListener(TIMER_CHANGED_EVENT, handleTimerChanged);
