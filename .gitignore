@@ -5,6 +5,7 @@
 .worktrees/
 .journals/
 .agents/skills/
+.claude/skills
 .orquestalite/
 team.json
 

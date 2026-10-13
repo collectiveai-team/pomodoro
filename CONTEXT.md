@@ -29,7 +29,7 @@ A single 25-minute focus interval dedicated to one Task, from start to stop or c
 _Avoid_: cycle, work interval, focus session, session
 
 **Timer**:
-A User's single live state of Pomodoro and Break progress: the current phase (idle, Pomodoro running or paused, asking whether to log an interrupted Pomodoro, Break running or paused, ready for the next one), the Task in progress and the active time accumulated so far. It keeps running when no page is open, and a phase that ran out meanwhile counts as having ended on its own at the moment it ran out.
+A User's single live state of Pomodoro and Break progress: the current phase (idle, Pomodoro running or paused, asking whether to log an interrupted Pomodoro, Break running or paused, ready for the next one — from which the User can start the Break, or skip it and start a Pomodoro on any of their Active Tasks), the Task in progress and the active time accumulated so far. It keeps running when no page is open, and a phase that ran out meanwhile counts as having ended on its own at the moment it ran out.
 _Avoid_: session (reserved for sign-in), clock
 
 **Break**:

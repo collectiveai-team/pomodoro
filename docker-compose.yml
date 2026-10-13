@@ -1,0 +1,58 @@
+# Production-like local environment: PostgreSQL + backend + frontend (ADR-0001, ADR-0002).
+# Migrations are an explicit step, never run at app startup:
+#   docker compose run --rm migrate
+# The backend only starts once that one-shot service has completed successfully.
+name: pomodoro
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: pomodoro
+      POSTGRES_PASSWORD: pomodoro
+      POSTGRES_DB: pomodoro
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pomodoro"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    image: pomodoro-backend
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      POMODORO_DATABASE_URL: postgresql+psycopg://pomodoro:pomodoro@db:5432/pomodoro
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  backend:
+    image: pomodoro-backend
+    environment:
+      POMODORO_DATABASE_URL: postgresql+psycopg://pomodoro:pomodoro@db:5432/pomodoro
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        BACKEND_INTERNAL_URL: http://backend:8000
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  pgdata:

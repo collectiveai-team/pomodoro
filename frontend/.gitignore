@@ -1,0 +1,16 @@
+# Dependencies
+node_modules/
+
+# Next.js build output
+.next/
+out/
+
+# Generated
+next-env.d.ts
+*.tsbuildinfo
+
+# Test / coverage
+coverage/
+
+# Local env
+.env*.local

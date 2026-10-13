@@ -7,7 +7,7 @@ build-backend = "hatchling.build"
 source = "vcs"
 
 [tool.hatch.build.targets.wheel]
-packages = ["pomodoro"]
+packages = ["backend/pomodoro"]
 
 # MARK: Ruff
 [tool.ruff]
@@ -87,7 +87,47 @@ max-complexity = 10
 ban-relative-imports = "all"
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101", "INP001", "S603", "S607"]
+# S105/S106: tests legitimately pass literal password strings as fixture data, never real secrets.
+"backend/tests/**" = ["S101", "INP001", "S603", "S607", "S105", "S106"]
+# backend/alembic is driven by the `alembic` CLI as standalone scripts (env.py, each revision
+# module), never imported as a package, so it carries no __init__.py (CES-18, ADR-0002).
+"backend/alembic/**" = ["INP001"]
+# backend/scripts holds standalone dev scripts (run directly with `python`, never imported as a
+# package), so it carries no __init__.py (T20: OpenAPI export for the frontend client).
+"backend/scripts/**" = ["INP001"]
+# CES-74 (core-logger): shipped verbatim from .agents/snippets/core/logger.py; its bootstrap
+# os.getenv line and the cached-config `global` are the house snippet's own design, not ours to
+# edit.
+"backend/pomodoro/core/logger.py" = ["E501", "PLW0603"]
+# FastAPI resolves every dependency callable's signature via `typing.get_type_hints` when the
+# app is built, including chained `Depends(...)`-typed parameters and return types. With
+# `from __future__ import annotations`, every name in those annotations must stay a real
+# top-level import — flake8-type-checking's suggestion to hide them behind `TYPE_CHECKING`
+# raises `NameError` at startup, since `core`'s repository Protocols live in a different module
+# than their `database` providers and can't be exempted by TC's same-import-statement heuristic
+# (see api/v1/routers/health.py, which dodges this only because `Clock`/`DbSession` happen to
+# share an import line with their runtime-used provider function).
+"backend/pomodoro/api/**/routers.py" = ["TC001", "TC002", "TC003"]
+# `health.py` is directly inside the version router package, which Ruff's nested-router glob
+# does not match. Its FastAPI dependency annotation must retain the runtime `Clock` Protocol.
+"backend/pomodoro/api/v1/routers/health.py" = ["TC001", "TC002", "TC003"]
+"backend/pomodoro/api/**/dependencies.py" = ["TC001", "TC002", "TC003"]
+"backend/pomodoro/database/repositories/**" = ["TC001", "TC002", "TC003"]
+
+# FastAPI's dependency-injection idiom is `param: T = Depends(...)` — calling Depends() in an
+# argument default is the documented pattern, not the footgun B008 otherwise guards against.
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Path", "fastapi.Header", "fastapi.Body"]
+
+# Pydantic, pydantic-settings, and SQLModel all resolve field annotations at class-creation
+# time, so types used only in one of these base classes' fields must stay real imports, never
+# moved into a `TYPE_CHECKING` block.
+[tool.ruff.lint.flake8-type-checking]
+runtime-evaluated-base-classes = [
+  "pydantic.BaseModel",
+  "pydantic_settings.BaseSettings",
+  "sqlmodel.SQLModel",
+]
 
 # MARK: Pyrefly
 [tool.pyrefly]
@@ -109,31 +149,28 @@ use-ignore-files = false
 disable-project-excludes-heuristics = true
 
 # MARK: import-linter (CES-5 layer direction, CES-17 api-boundary layout)
-# Commented skeleton — uncomment once the package actually has layers. Enforces the house import
-# direction: entrypoints -> api -> database/impl -> core (a higher layer may import lower ones,
-# never the reverse). Add `import-linter` to the dev group and run `uvx --from import-linter
-# lint-imports`. Replace `myapp` below with your import package name.
-#
-# [tool.importlinter]
-# root_package = "myapp"
-#
-# [[tool.importlinter.contracts]]
-# name = "Layered architecture (CES-5)"
-# type = "layers"
-# layers = [
-#   "myapp.entrypoints",
-#   "myapp.api",
-#   "myapp.database | myapp.impl",
-#   "myapp.core",
-# ]
-#
-# # CES-17 api-boundary layout: the api package is the only inbound HTTP boundary; nothing
-# # outside api may import api.schemas/routers internals.
-# [[tool.importlinter.contracts]]
-# name = "API is the only inbound boundary (CES-17)"
-# type = "forbidden"
-# source_modules = ["myapp.core", "myapp.database"]
-# forbidden_modules = ["myapp.api"]
+# Enforces the house import direction: entrypoints -> api -> database -> core (a higher layer
+# may import lower ones, never the reverse). Run with `uv run lint-imports`.
+[tool.importlinter]
+root_package = "pomodoro"
+
+[[tool.importlinter.contracts]]
+name = "Layered architecture (CES-5)"
+type = "layers"
+layers = [
+  "pomodoro.entrypoints",
+  "pomodoro.api",
+  "pomodoro.database",
+  "pomodoro.core",
+]
+
+# CES-17 api-boundary layout: the api package is the only inbound HTTP boundary; nothing
+# outside api may import api.schemas/routers internals.
+[[tool.importlinter.contracts]]
+name = "API is the only inbound boundary (CES-17)"
+type = "forbidden"
+source_modules = ["pomodoro.core", "pomodoro.database"]
+forbidden_modules = ["pomodoro.api"]
 
 # MARK: Pytest
 [tool.pytest.ini_options]
@@ -143,7 +180,7 @@ disable-project-excludes-heuristics = true
 addopts = ["--import-mode=importlib"]
 consider_namespace_packages = false
 asyncio_mode = "auto"
-testpaths = ["tests"]
+testpaths = ["backend/tests"]
 markers = [
   "unit: fast isolated tests, no external deps",
   "integration: tests requiring external services or multi-component interaction",
@@ -161,7 +198,20 @@ readme = "README.md"
 requires-python = ">=3.14"
 
 # MARK: Dependencies
-dependencies = []
+dependencies = [
+  "alembic>=1.20.0",
+  "email-validator>=2.2.0",
+  "fastapi>=0.115",
+  "psycopg[binary]>=3.3.6",
+  "pwdlib[argon2]>=0.2.1",
+  "pydantic>=2.9",
+  "pydantic-settings>=2.6",
+  "sqlalchemy>=2.1.4",
+  "sqlmodel>=0.0.48",
+  "structlog>=24.4",
+  "tzdata>=2025.2",
+  "uvicorn[standard]>=0.32",
+]
 
 # MARK: Extra deps
 [dependency-groups]
@@ -173,10 +223,31 @@ dev = [
   # order on every run — catches state-leaking/order-dependent tests for free.
   "pytest-randomly>=4.1.0",
   "ruff>=0.7.0",
+  # CES-5 (import-linter): enforces the layers contract below; exposes `lint-imports`.
+  "import-linter>=2.1",
+  # Pulled in transitively by fastapi.testclient.TestClient (starlette's optional extra); never
+  # imported by name in our code, so deptry needs the DEP002 ignore below.
+  "httpx>=0.27",
 ]
 
 # MARK: deptry
 # .agents/snippets/ are botica drop-in templates (they import pydantic/structlog before the app
-# adopts them); .worktrees/.orquestalite are local checkouts and agent run state.
+# adopts them); .worktrees/.orquestalite are local checkouts and agent run state. deptry's
+# default `tests` exclude only matches a root-level `tests/` dir (re.match, unanchored suffix),
+# so it misses the relocated `backend/tests/` — add it explicitly. `pomodoro` lives two levels
+# deep (`backend/pomodoro`), below deptry's first-party auto-detection depth, so it must be
+# named explicitly too.
 [tool.deptry]
-extend_exclude = [".agents", ".claude", ".worktrees", ".orquestalite"]
+extend_exclude = [".agents", ".claude", ".worktrees", ".orquestalite", "backend/tests"]
+known_first_party = ["pomodoro"]
+
+[tool.deptry.per_rule_ignores]
+# import-linter ships the `lint-imports` console script, never imported by name.
+# httpx is TestClient's runtime dependency, never imported directly in our code.
+# psycopg (ADR-0002's PostgreSQL driver) is loaded dynamically by SQLAlchemy's dialect system
+# (the `postgresql+psycopg://` URL scheme), never imported by name in our code.
+# uvicorn (T20) runs the app via its CLI (`uvicorn pomodoro.entrypoints.app:app`), never
+# imported by name in our code.
+# tzdata is the zoneinfo fallback database: slim images ship no legacy zone aliases (e.g.
+# America/Buenos_Aires, which browsers still report), so without it Timer/History 500.
+DEP002 = ["import-linter", "httpx", "psycopg", "tzdata", "uvicorn"]
