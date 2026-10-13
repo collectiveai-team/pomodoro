@@ -347,3 +347,87 @@ describe("TasksPanel — passive Timer phase changes", () => {
     await waitFor(() => expect(startButton).toBeEnabled(), { timeout: 4000 });
   });
 });
+
+describe("TasksPanel — Task ▶ by Timer phase", () => {
+  beforeEach(() => {
+    // jsdom has no media playback; the Timer panel unlocks its Alarm on the first click.
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+    vi.spyOn(HTMLMediaElement.prototype, "pause").mockReturnValue(undefined);
+  });
+
+  it.each([
+    ["Idle", true],
+    ["ReadyForNext", true],
+    ["PomodoroRunning", false],
+    ["PomodoroPaused", false],
+    ["BreakRunning", false],
+    ["BreakPaused", false],
+    ["AskingToLog", false],
+  ] as const)("in %s the ▶ enabled state is %s", async (phase, enabled) => {
+    setupFixture({ activeTasks: [makeTask()], timerPhase: phase });
+
+    render(<TasksPanel />);
+    const startButton = await screen.findByRole("button", { name: /Iniciar Pomodoro en/ });
+
+    if (enabled) {
+      await waitFor(() => expect(startButton).toBeEnabled());
+    } else {
+      await waitFor(() => expect(startButton).toBeDisabled());
+      // The phase fetch has settled, so a disabled button is the phase's doing, not a loading state.
+      await waitFor(() => expect(getMock).toHaveBeenCalledWith("/api/v1/timer"));
+      expect(startButton).toBeDisabled();
+    }
+  });
+
+  it("starts from ReadyForNext sending expected_phase ReadyForNext", async () => {
+    setupFixture({ activeTasks: [makeTask({ id: "task-2" })], timerPhase: "ReadyForNext" });
+    postMock.mockResolvedValue({
+      data: { ...makeTimer("PomodoroRunning"), task: makeTask({ id: "task-2" }) },
+      error: undefined,
+      response: ok(200),
+    });
+    const user = userEvent.setup();
+
+    render(<TasksPanel />);
+    const startButton = await screen.findByRole("button", { name: /Iniciar Pomodoro en/ });
+    await waitFor(() => expect(startButton).toBeEnabled());
+    await user.click(startButton);
+
+    await waitFor(() => {
+      expect(postMock).toHaveBeenCalledWith("/api/v1/timer/start", {
+        body: { task_id: "task-2", expected_phase: "ReadyForNext" },
+      });
+    });
+  });
+
+  it("updates the Timer panel after starting on another Task from ReadyForNext", async () => {
+    setupFixture({ activeTasks: [makeTask({ id: "task-2" })], timerPhase: "ReadyForNext" });
+    const running = { ...makeTimer("PomodoroRunning"), task: makeTask({ id: "task-2" }) };
+    let timer: TimerResponseBody = makeTimer("ReadyForNext");
+    const baseGet = getMock.getMockImplementation() as (path: string) => Promise<unknown>;
+    getMock.mockImplementation((path: string) =>
+      path === "/api/v1/timer"
+        ? Promise.resolve({ data: timer, error: undefined, response: ok() })
+        : path === "/api/v1/settings"
+          ? Promise.resolve({ data: undefined, error: { detail: "x" }, response: ok() })
+          : baseGet(path),
+    );
+    postMock.mockImplementation(() => {
+      timer = running;
+      return Promise.resolve({ data: running, error: undefined, response: ok(200) });
+    });
+    const user = userEvent.setup();
+
+    render(
+      <>
+        <TimerPanel />
+        <TasksPanel />
+      </>,
+    );
+    const startButton = await screen.findByRole("button", { name: /Iniciar Pomodoro en/ });
+    await waitFor(() => expect(startButton).toBeEnabled());
+    await user.click(startButton);
+
+    expect(await screen.findByRole("button", { name: "Pausar" })).toBeInTheDocument();
+  });
+});

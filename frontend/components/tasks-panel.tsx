@@ -9,6 +9,7 @@ import { apiClient } from "@/lib/api-client";
 import { toApiError } from "@/lib/api-error";
 import { redirectToLoginOn401 } from "@/lib/http-session";
 import { EMPTY_TASK_FILTER, type TaskFilterState } from "@/lib/task-filter";
+import { isTaskStartDisabled } from "@/lib/task-start";
 import { broadcastTimerChanged } from "@/lib/timer-sync";
 import { useTagCatalog } from "@/lib/use-tag-catalog";
 import { useTaskList } from "@/lib/use-task-list";
@@ -257,7 +258,7 @@ export function TasksPanel() {
                     pending={pendingTaskId === task.id}
                     actions={{
                       variant: "active",
-                      startDisabled: timerPhase !== "Idle",
+                      startDisabled: isTaskStartDisabled(timerPhase),
                       onStart: handleStart,
                       onArchive: handleArchive,
                     }}
