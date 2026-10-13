@@ -20,6 +20,14 @@ beforeEach(() => {
   pushMock.mockReset();
 });
 
+async function submitRegisterForm() {
+  const user = userEvent.setup();
+  render(<RegisterPage />);
+  await user.type(screen.getByLabelText("Email"), "a@b.co");
+  await user.type(screen.getByLabelText("Contraseña"), "long-enough-pass");
+  await user.click(screen.getByRole("button", { name: "Crear cuenta" }));
+}
+
 describe("LoginPage", () => {
   it("shows Spanish labels", () => {
     render(<LoginPage />);
@@ -56,11 +64,7 @@ describe("RegisterPage", () => {
     registerMock.mockRejectedValue(
       new ApiError({ detail: "Email already registered", code: "duplicate_email" }),
     );
-    const user = userEvent.setup();
-    render(<RegisterPage />);
-    await user.type(screen.getByLabelText("Email"), "a@b.co");
-    await user.type(screen.getByLabelText("Contraseña"), "long-enough-pass");
-    await user.click(screen.getByRole("button", { name: "Crear cuenta" }));
+    await submitRegisterForm();
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Ya existe una cuenta con ese email.",
@@ -70,15 +74,21 @@ describe("RegisterPage", () => {
 
   it("shows the generic Spanish message for an unknown code", async () => {
     registerMock.mockRejectedValue(new ApiError({ detail: "Boom", code: "brand_new_code" }));
-    const user = userEvent.setup();
-    render(<RegisterPage />);
-    await user.type(screen.getByLabelText("Email"), "a@b.co");
-    await user.type(screen.getByLabelText("Contraseña"), "long-enough-pass");
-    await user.click(screen.getByRole("button", { name: "Crear cuenta" }));
+    await submitRegisterForm();
 
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent("Algo salió mal. Inténtalo de nuevo."),
     );
     expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  it("shows the generic Spanish message for a non-ApiError such as a network failure", async () => {
+    registerMock.mockRejectedValue(new TypeError("Failed to fetch"));
+    await submitRegisterForm();
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent("Algo salió mal. Inténtalo de nuevo."),
+    );
+    expect(screen.queryByText("Failed to fetch")).not.toBeInTheDocument();
   });
 });

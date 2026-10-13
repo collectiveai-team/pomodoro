@@ -1,7 +1,7 @@
 "use client";
 
 import { type FormEvent, type ReactNode, useState } from "react";
-import { GENERIC_ERROR_MESSAGE } from "@/lib/api-error";
+import { ApiError, GENERIC_ERROR_MESSAGE } from "@/lib/api-error";
 
 export interface AuthFormProps {
   title: string;
@@ -24,7 +24,7 @@ export function AuthForm({ title, submitLabel, onSubmit, footer }: AuthFormProps
     try {
       await onSubmit(email, password);
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : GENERIC_ERROR_MESSAGE);
+      setError(submitError instanceof ApiError ? submitError.message : GENERIC_ERROR_MESSAGE);
     } finally {
       setSubmitting(false);
     }

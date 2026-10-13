@@ -115,7 +115,7 @@ function ChangePasswordForm({
   );
 }
 
-/** Change-time-zone form: a full-replace Settings PATCH keeping Alarm/notifications (Story 5). */
+/** Change-time-zone form: a partial Settings PATCH sending only the time zone (Story 5). */
 function TimeZoneForm({
   settings,
   onCancel,
@@ -137,7 +137,7 @@ function TimeZoneForm({
       error,
       response,
     } = await apiClient.PATCH("/api/v1/settings", {
-      body: { ...settings, time_zone: timeZone },
+      body: { time_zone: timeZone },
     });
     setSubmitting(false);
     if (await redirectToLoginOn401(response)) {

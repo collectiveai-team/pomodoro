@@ -132,7 +132,7 @@ describe("AccountMenu — change time zone (Story 5)", () => {
     expect(screen.queryByText("Cargando…")).not.toBeInTheDocument();
   });
 
-  it("loads the current time zone and PATCHes Settings with it replaced, preserving the rest", async () => {
+  it("loads the current time zone and PATCHes only the changed time_zone field", async () => {
     patchMock.mockResolvedValue({
       data: makeSettings({ time_zone: "Europe/Madrid" }),
       error: undefined,
@@ -149,11 +149,7 @@ describe("AccountMenu — change time zone (Story 5)", () => {
 
     await waitFor(() => {
       expect(patchMock).toHaveBeenCalledWith("/api/v1/settings", {
-        body: {
-          alarm_enabled: true,
-          notifications_enabled: false,
-          time_zone: "Europe/Madrid",
-        },
+        body: { time_zone: "Europe/Madrid" },
       });
     });
     expect(await screen.findByText("Zona horaria actualizada.")).toBeInTheDocument();
