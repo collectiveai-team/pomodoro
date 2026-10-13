@@ -143,7 +143,7 @@ export function TimerPanel() {
         error: settingsError,
         response,
       } = await apiClient.PATCH("/api/v1/settings", {
-        body: { ...current, ...partial },
+        body: partial,
       });
       if (await redirectToLoginOn401(response)) {
         return;
