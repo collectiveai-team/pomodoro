@@ -56,7 +56,7 @@ class Tag:
     user_id: UserId
     name: str
     name_key: str
-    color: TagColor = TagColor.ROSE
+    color: TagColor
 
 
 def pick_tag_color(existing_tags: Iterable[Tag]) -> TagColor:
