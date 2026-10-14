@@ -1,25 +1,16 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import * as alarm from "@/lib/alarm";
 import type { components } from "@/lib/api/schema";
+import { SETTINGS_CHANGED_EVENT } from "@/lib/settings-sync";
 import { AccountMenu } from "./account-menu";
+import { deleteMock, getMock, patchMock, postMock } from "./api-client-mock";
 
 type SettingsResponseBody = components["schemas"]["SettingsResponse"];
 type UserEvent = ReturnType<typeof userEvent.setup>;
 
-const getMock = vi.fn();
-const postMock = vi.fn();
-const patchMock = vi.fn();
-const deleteMock = vi.fn();
-
-vi.mock("@/lib/api-client", () => ({
-  apiClient: {
-    GET: (...args: unknown[]) => getMock(...args),
-    POST: (...args: unknown[]) => postMock(...args),
-    PATCH: (...args: unknown[]) => patchMock(...args),
-    DELETE: (...args: unknown[]) => deleteMock(...args),
-  },
-}));
+vi.mock("@/lib/api-client", async () => (await import("./api-client-mock")).apiClientModule);
 
 function ok(status = 200): Response {
   return { status } as Response;
@@ -236,5 +227,103 @@ describe("AccountMenu — 401 mid-session (reuses the shared redirect helper)", 
     await waitFor(() => {
       expect(assignSpy).toHaveBeenCalledWith("/login");
     });
+  });
+});
+
+describe("AccountMenu — Alarm and notification toggles", () => {
+  it("shows both toggles reflecting the stored Settings once opened", async () => {
+    getMock.mockResolvedValue({
+      data: makeSettings({ alarm_enabled: true, notifications_enabled: false }),
+      error: undefined,
+      response: ok(),
+    });
+    const user = userEvent.setup();
+    await renderAndOpenMenu(user);
+
+    expect(await screen.findByLabelText("Alarm")).toBeChecked();
+    expect(screen.getByLabelText("Notificaciones")).not.toBeChecked();
+  });
+
+  it("PATCHes only the toggled field so the stored time zone is not overwritten", async () => {
+    getMock.mockResolvedValue({
+      data: makeSettings({ alarm_enabled: false }),
+      error: undefined,
+      response: ok(),
+    });
+    patchMock.mockResolvedValue({
+      data: makeSettings({ alarm_enabled: true }),
+      error: undefined,
+      response: ok(),
+    });
+    const user = userEvent.setup();
+    await renderAndOpenMenu(user);
+    await user.click(await screen.findByLabelText("Alarm"));
+
+    await waitFor(() => {
+      expect(patchMock).toHaveBeenCalledWith("/api/v1/settings", {
+        body: { alarm_enabled: true },
+      });
+    });
+    await waitFor(() => expect(screen.getByLabelText("Alarm")).toBeChecked());
+  });
+
+  it("announces the saved Settings so the Timer panel picks them up", async () => {
+    const saved = makeSettings({ alarm_enabled: false });
+    getMock.mockResolvedValue({ data: makeSettings(), error: undefined, response: ok() });
+    patchMock.mockResolvedValue({ data: saved, error: undefined, response: ok() });
+    const heard = vi.fn((event: Event) => (event as CustomEvent).detail);
+    window.addEventListener(SETTINGS_CHANGED_EVENT, heard);
+    const user = userEvent.setup();
+    await renderAndOpenMenu(user);
+    await user.click(await screen.findByLabelText("Alarm"));
+
+    await waitFor(() => expect(heard).toHaveBeenCalledTimes(1));
+    expect(heard.mock.results[0]?.value).toEqual(saved);
+    window.removeEventListener(SETTINGS_CHANGED_EVENT, heard);
+  });
+
+  it("warns and does not enable notifications when the browser denies permission", async () => {
+    vi.spyOn(alarm, "requestNotificationPermission").mockResolvedValue("denied");
+    getMock.mockResolvedValue({
+      data: makeSettings({ notifications_enabled: false }),
+      error: undefined,
+      response: ok(),
+    });
+    patchMock.mockResolvedValue({
+      data: makeSettings({ notifications_enabled: false }),
+      error: undefined,
+      response: ok(),
+    });
+    const user = userEvent.setup();
+    await renderAndOpenMenu(user);
+    await user.click(await screen.findByLabelText("Notificaciones"));
+
+    expect(
+      await screen.findByText("Permiso de notificaciones denegado por el navegador."),
+    ).toBeInTheDocument();
+    expect(patchMock).not.toHaveBeenCalledWith(
+      "/api/v1/settings",
+      expect.objectContaining({ body: { notifications_enabled: true } }),
+    );
+    expect(screen.getByLabelText("Notificaciones")).not.toBeChecked();
+  });
+
+  it("surfaces a save failure instead of flipping the toggle", async () => {
+    getMock.mockResolvedValue({
+      data: makeSettings({ alarm_enabled: false }),
+      error: undefined,
+      response: ok(),
+    });
+    patchMock.mockResolvedValue({
+      data: undefined,
+      error: { detail: "boom", code: "settings_unavailable" },
+      response: ok(500),
+    });
+    const user = userEvent.setup();
+    await renderAndOpenMenu(user);
+    await user.click(await screen.findByLabelText("Alarm"));
+
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(screen.getByLabelText("Alarm")).not.toBeChecked();
   });
 });

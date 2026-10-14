@@ -16,7 +16,9 @@ import { useTagCatalog } from "@/lib/use-tag-catalog";
 import { useTaskList } from "@/lib/use-task-list";
 import { createDragEndHandler, useTaskReorderSensors } from "@/lib/use-task-reorder";
 import { useTimerPhase } from "@/lib/use-timer-phase";
+import { AccountMenu } from "./account-menu";
 import { HistoryPanel } from "./history-panel";
+import { TabButton } from "./tab-button";
 import { TagManager } from "./tag-manager";
 import { TaskFilter } from "./task-filter";
 import { TaskRow, type TaskRowProps } from "./task-row";
@@ -205,125 +207,120 @@ export function TasksPanel() {
   );
 
   return (
-    <section className="flex w-full max-w-md flex-col gap-4 p-6">
-      <div className="flex gap-2" role="tablist">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === "active"}
-          onClick={() => setTab("active")}
-          className="tab-button"
+    <section className="flex w-full flex-col gap-4">
+      <div className="flex items-center gap-4 border-b border-border px-6" role="tablist">
+        <TabButton
+          selected={tab === "active"}
+          count={activeState.activeCount}
+          onSelect={() => setTab("active")}
         >
-          Activas ({activeState.activeCount})
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === "archived"}
-          onClick={() => setTab("archived")}
-          className="tab-button"
+          Activas
+        </TabButton>
+        <TabButton
+          selected={tab === "archived"}
+          count={archivedState.archivedCount}
+          onSelect={() => setTab("archived")}
         >
-          Archivadas ({archivedState.archivedCount})
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === "history"}
-          onClick={() => setTab("history")}
-          className="tab-button"
-        >
+          Archivadas
+        </TabButton>
+        <TabButton selected={tab === "history"} onSelect={() => setTab("history")}>
           Historial
-        </button>
+        </TabButton>
+        <div className="ml-auto py-1">
+          <AccountMenu />
+        </div>
       </div>
 
-      <TagManager tags={tags} onChanged={refetchBoth} onDeleted={dropDeletedTag} />
+      <div className="flex flex-col gap-4 px-6 pb-6">
+        <TagManager tags={tags} onChanged={refetchBoth} onDeleted={dropDeletedTag} />
 
-      {actionError ? (
-        <p role="alert" className="text-sm text-red-600">
-          {actionError}
-        </p>
-      ) : null}
+        {actionError ? (
+          <p role="alert" className="text-sm text-red-600">
+            {actionError}
+          </p>
+        ) : null}
 
-      {tab === "active" ? (
-        <>
-          <TaskFilter
-            label="Filtrar Activas"
-            tags={tags}
-            value={activeFilter}
-            onChange={setActiveFilter}
-          />
-
-          <form onSubmit={handleCreateTask} className="flex flex-col gap-1">
-            <input
-              type="text"
-              aria-label="Nueva tarea"
-              placeholder="＋ Nueva tarea"
-              value={newTaskText}
-              onChange={(event) => setNewTaskText(event.target.value)}
-              disabled={creating}
-              className="field-input"
+        {tab === "active" ? (
+          <>
+            <TaskFilter
+              label="Filtrar Activas"
+              tags={tags}
+              value={activeFilter}
+              onChange={setActiveFilter}
             />
-            {createError ? (
-              <p role="alert" className="text-sm text-red-600">
-                {createError}
-              </p>
-            ) : null}
-          </form>
 
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-          >
-            <SortableContext
-              items={activeState.tasks.map((task) => task.id)}
-              strategy={verticalListSortingStrategy}
-            >
-              <ul className="flex flex-col gap-2">
-                {activeState.tasks.map((task: TaskResponseBody) => (
-                  <SortableTaskRow
-                    key={task.id}
-                    task={task}
-                    {...sharedRowProps(task.id)}
-                    actions={{
-                      variant: "active",
-                      startDisabled: isTaskStartDisabled(timerPhase),
-                      onStart: handleStart,
-                      onArchive: handleArchive,
-                    }}
-                  />
-                ))}
-              </ul>
-            </SortableContext>
-          </DndContext>
-        </>
-      ) : tab === "history" ? (
-        <HistoryPanel />
-      ) : (
-        <>
-          <TaskFilter
-            label="Filtrar Archivadas"
-            tags={tags}
-            value={archivedFilter}
-            onChange={setArchivedFilter}
-          />
-
-          <ul className="flex flex-col gap-2">
-            {archivedState.tasks.map((task: TaskResponseBody) => (
-              <TaskRow
-                key={task.id}
-                task={task}
-                {...sharedRowProps(task.id)}
-                actions={{
-                  variant: "archived",
-                  onUnarchive: handleUnarchive,
-                  onDelete: handleDelete,
-                }}
+            <form onSubmit={handleCreateTask} className="flex flex-col gap-1">
+              <input
+                type="text"
+                aria-label="Nueva tarea"
+                placeholder="＋ Nueva tarea"
+                value={newTaskText}
+                onChange={(event) => setNewTaskText(event.target.value)}
+                disabled={creating}
+                className="field-input"
               />
-            ))}
-          </ul>
-        </>
-      )}
+              {createError ? (
+                <p role="alert" className="text-sm text-red-600">
+                  {createError}
+                </p>
+              ) : null}
+            </form>
+
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext
+                items={activeState.tasks.map((task) => task.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                <ul className="flex flex-col gap-2">
+                  {activeState.tasks.map((task: TaskResponseBody) => (
+                    <SortableTaskRow
+                      key={task.id}
+                      task={task}
+                      {...sharedRowProps(task.id)}
+                      actions={{
+                        variant: "active",
+                        startDisabled: isTaskStartDisabled(timerPhase),
+                        onStart: handleStart,
+                        onArchive: handleArchive,
+                      }}
+                    />
+                  ))}
+                </ul>
+              </SortableContext>
+            </DndContext>
+          </>
+        ) : tab === "history" ? (
+          <HistoryPanel />
+        ) : (
+          <>
+            <TaskFilter
+              label="Filtrar Archivadas"
+              tags={tags}
+              value={archivedFilter}
+              onChange={setArchivedFilter}
+            />
+
+            <ul className="flex flex-col gap-2">
+              {archivedState.tasks.map((task: TaskResponseBody) => (
+                <TaskRow
+                  key={task.id}
+                  task={task}
+                  {...sharedRowProps(task.id)}
+                  actions={{
+                    variant: "archived",
+                    onUnarchive: handleUnarchive,
+                    onDelete: handleDelete,
+                  }}
+                />
+              ))}
+            </ul>
+          </>
+        )}
+      </div>
     </section>
   );
 }

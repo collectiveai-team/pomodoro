@@ -5,6 +5,7 @@ import type { components } from "@/lib/api/schema";
 import { apiClient } from "@/lib/api-client";
 import { toApiError } from "@/lib/api-error";
 import { redirectToLoginOn401 } from "@/lib/http-session";
+import { AccountPreferences } from "./account-preferences";
 
 type SettingsResponseBody = components["schemas"]["SettingsResponse"];
 
@@ -223,9 +224,9 @@ export function AccountMenu() {
   const [notice, setNotice] = useState<string | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
 
-  // Fetched lazily, only once, when the time-zone form is actually opened.
+  // Fetched lazily, only once, when the menu is first opened (toggles and time-zone form).
   useEffect(() => {
-    if (view !== "timezone" || settings !== null) {
+    if (view === "closed" || settings !== null) {
       return;
     }
     let cancelled = false;
@@ -284,70 +285,78 @@ export function AccountMenu() {
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-border bg-base p-4">
-      {error ? (
-        <p role="alert" className="text-sm text-red-600">
-          {error}
-        </p>
-      ) : null}
-      {notice ? <p className="text-sm">{notice}</p> : null}
+    <div className="relative">
+      <button type="button" onClick={closeMenu} className="btn-secondary" aria-expanded="true">
+        Cuenta
+      </button>
+      <div className="absolute right-0 top-full z-10 mt-2 flex w-72 flex-col gap-3 rounded-lg border border-border bg-surface p-4 shadow-lg">
+        {error ? (
+          <p role="alert" className="text-sm text-red-600">
+            {error}
+          </p>
+        ) : null}
+        {notice ? <p className="text-sm">{notice}</p> : null}
 
-      {view === "menu" ? (
-        <>
-          <button type="button" onClick={() => setView("password")} className="btn-secondary">
-            Cambiar contraseña
-          </button>
-          <button type="button" onClick={() => setView("timezone")} className="btn-secondary">
-            Cambiar zona horaria
-          </button>
-          <button type="button" onClick={() => setView("delete")} className="btn-secondary">
-            Borrar cuenta
-          </button>
-          <button
-            type="button"
-            disabled={loggingOut}
-            onClick={handleLogout}
-            className="btn-primary"
-          >
-            Cerrar sesión
-          </button>
-          <button type="button" onClick={closeMenu} className="btn-secondary">
-            Cerrar
-          </button>
-        </>
-      ) : null}
+        {view === "menu" ? (
+          <>
+            {settings ? (
+              <AccountPreferences settings={settings} onSaved={setSettings} onError={setError} />
+            ) : null}
+            <button type="button" onClick={() => setView("password")} className="btn-secondary">
+              Cambiar contraseña
+            </button>
+            <button type="button" onClick={() => setView("timezone")} className="btn-secondary">
+              Cambiar zona horaria
+            </button>
+            <button type="button" onClick={() => setView("delete")} className="btn-secondary">
+              Borrar cuenta
+            </button>
+            <button
+              type="button"
+              disabled={loggingOut}
+              onClick={handleLogout}
+              className="btn-primary"
+            >
+              Cerrar sesión
+            </button>
+            <button type="button" onClick={closeMenu} className="btn-secondary">
+              Cerrar
+            </button>
+          </>
+        ) : null}
 
-      {view === "password" ? (
-        <ChangePasswordForm
-          onCancel={() => setView("menu")}
-          onError={setError}
-          onDone={(message) => {
-            setNotice(message);
-            setView("menu");
-          }}
-        />
-      ) : null}
-
-      {view === "timezone" ? (
-        settings ? (
-          <TimeZoneForm
-            settings={settings}
+        {view === "password" ? (
+          <ChangePasswordForm
             onCancel={() => setView("menu")}
             onError={setError}
-            onDone={(updated) => {
-              setSettings(updated);
-              setNotice("Zona horaria actualizada.");
+            onDone={(message) => {
+              setNotice(message);
               setView("menu");
             }}
           />
-        ) : error ? null : (
-          <p>Cargando…</p>
-        )
-      ) : null}
+        ) : null}
 
-      {view === "delete" ? (
-        <DeleteAccountForm onCancel={() => setView("menu")} onError={setError} />
-      ) : null}
+        {view === "timezone" ? (
+          settings ? (
+            <TimeZoneForm
+              settings={settings}
+              onCancel={() => setView("menu")}
+              onError={setError}
+              onDone={(updated) => {
+                setSettings(updated);
+                setNotice("Zona horaria actualizada.");
+                setView("menu");
+              }}
+            />
+          ) : error ? null : (
+            <p>Cargando…</p>
+          )
+        ) : null}
+
+        {view === "delete" ? (
+          <DeleteAccountForm onCancel={() => setView("menu")} onError={setError} />
+        ) : null}
+      </div>
     </div>
   );
 }

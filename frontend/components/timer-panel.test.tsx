@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TIMER_CHANGED_EVENT } from "@/lib/timer-sync";
+import { makeTimer, okResult } from "./task-fixtures";
 import { TimerPanel } from "./timer-panel";
 
 const getMock = vi.fn();
@@ -13,30 +14,15 @@ vi.mock("@/lib/api-client", () => ({
   },
 }));
 
-function timer(phase: string, remaining: number | null = null) {
-  return {
-    phase,
-    task: null,
-    break_kind: phase === "BreakRunning" ? "short" : null,
-    phase_started_at: null,
-    accumulated_active_seconds: 0,
-    running_since: null,
-    server_now: new Date().toISOString(),
-    remaining_seconds: remaining,
-    pomodoros_completed_today: 0,
-    pomodoros_until_long_break: 4,
-  };
-}
-
-let current = timer("Idle");
+let current = makeTimer("Idle");
 
 beforeEach(() => {
   getMock.mockReset();
   postMock.mockReset();
-  current = timer("Idle");
+  current = makeTimer("Idle");
   getMock.mockImplementation((path: string) => {
     const data = path === "/api/v1/timer" ? current : { alarm_enabled: false };
-    return Promise.resolve({ data, error: undefined, response: { status: 200 } as Response });
+    return okResult(data);
   });
 });
 
@@ -46,14 +32,14 @@ afterEach(() => {
 
 describe("TimerPanel — phase broadcast", () => {
   it("broadcasts a phase change found by a passive refetch, once, without looping", async () => {
-    current = timer("BreakRunning", 1);
+    current = makeTimer("BreakRunning", 1);
     const events: CustomEvent[] = [];
     window.addEventListener(TIMER_CHANGED_EVENT, (e) => events.push(e as CustomEvent));
     render(<TimerPanel />);
     await screen.findAllByText(/Break/);
     expect(events).toHaveLength(0);
 
-    current = timer("Idle");
+    current = makeTimer("Idle");
     await waitFor(() => expect(events).toHaveLength(1), { timeout: 4000 });
 
     expect(events[0]?.detail).toEqual({ phase: "Idle", taskId: null });
