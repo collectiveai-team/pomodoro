@@ -137,6 +137,14 @@ afterEach(() => {
 });
 
 describe("TasksPanel — create on Enter", () => {
+  it("shows the dashed '+ Nueva tarea (Enter)' row", async () => {
+    setupFixture();
+    render(<TasksPanel />);
+    const input = await screen.findByLabelText("Nueva tarea");
+    expect(input).toHaveAttribute("placeholder", "+ Nueva tarea (Enter)");
+    expect(input).toHaveClass("border-dashed");
+  });
+
   it("creates a Task and clears the input on success", async () => {
     setupFixture();
     postMock.mockResolvedValue({

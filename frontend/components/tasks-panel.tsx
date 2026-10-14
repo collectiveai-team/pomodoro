@@ -271,11 +271,11 @@ export function TasksPanel() {
               <input
                 type="text"
                 aria-label="Nueva tarea"
-                placeholder="＋ Nueva tarea"
+                placeholder="+ Nueva tarea (Enter)"
                 value={newTaskText}
                 onChange={(event) => setNewTaskText(event.target.value)}
                 disabled={creating}
-                className="field-input"
+                className="field-input border-dashed bg-transparent"
               />
               {createError ? (
                 <p role="alert" className="text-sm text-red-600">

@@ -10,7 +10,7 @@ type TagResponseBody = components["schemas"]["TagResponse"];
 /** Window event telling every mounted catalog consumer to reload (Tag created/renamed/deleted). */
 export const TAG_CATALOG_CHANGED_EVENT = "pomodoro:tag-catalog-changed";
 
-/** Refreshes every mounted `useTagCatalog` after a Tag mutation (Task Tag editor; Tag manager, T13). */
+/** Refreshes every mounted `useTagCatalog` after a Tag mutation (Tag popover). */
 export function refreshTagCatalog(): void {
   window.dispatchEvent(new Event(TAG_CATALOG_CHANGED_EVENT));
 }
