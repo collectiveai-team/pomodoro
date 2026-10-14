@@ -61,3 +61,15 @@ def test_rename_keeps_the_stored_color(session: Session, user_id: UserId) -> Non
     renamed = repo.get_by_id(user_id, tag.id)
     assert renamed is not None
     assert (renamed.name, renamed.color) == ("Later", TagColor.SKY)
+
+
+def test_update_color_persists_and_keeps_the_name(session: Session, user_id: UserId) -> None:
+    repo = SqlTagRepository(session)
+    tag = _tag(user_id, "Urgent", TagColor.SKY)
+    repo.add(tag)
+
+    repo.update_color(user_id, tag.id, TagColor.TEAL)
+
+    recolored = repo.get_by_id(user_id, tag.id)
+    assert recolored is not None
+    assert (recolored.name, recolored.color) == ("Urgent", TagColor.TEAL)

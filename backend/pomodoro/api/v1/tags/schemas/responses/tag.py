@@ -1,10 +1,12 @@
-"""CES-4 · outbound payload for a Tag (list, rename)."""
+"""CES-4 · outbound payload for a Tag (list, update)."""
 
 from __future__ import annotations
 
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
+
+from pomodoro.core.tags import TagColor
 
 
 class TagResponse(BaseModel):
@@ -14,3 +16,4 @@ class TagResponse(BaseModel):
 
     id: UUID
     name: str
+    color: TagColor

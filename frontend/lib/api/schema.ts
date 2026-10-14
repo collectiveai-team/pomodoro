@@ -320,10 +320,10 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * Rename
-         * @description Rename a Tag; the new name is visible on every Task that carries it.
+         * Update
+         * @description Update a Tag's name and/or color; changes are visible on every Task that carries it.
          */
-        patch: operations["rename_api_v1_tags__tag_id__patch"];
+        patch: operations["update_api_v1_tags__tag_id__patch"];
         trace?: never;
     };
     "/api/v1/timer": {
@@ -769,14 +769,6 @@ export interface components {
             time_zone: string;
         };
         /**
-         * RenameTagRequest
-         * @description Rename-Tag payload: the new name, validated under the same rules as creation.
-         */
-        RenameTagRequest: {
-            /** Name */
-            name: string;
-        };
-        /**
          * ReorderTasksRequest
          * @description The caller's full ordered list of Active Task ids; rewritten as `position` 0..n-1.
          */
@@ -817,6 +809,12 @@ export interface components {
             expected_phase: components["schemas"]["TimerPhase"];
         };
         /**
+         * TagColor
+         * @description The closed Tag palette; the stored value is the key, never a hex. Order is significant.
+         * @enum {string}
+         */
+        TagColor: "rose" | "orange" | "amber" | "green" | "teal" | "sky" | "violet" | "slate";
+        /**
          * TagListResponse
          * @description The caller's full Tag catalog.
          */
@@ -836,6 +834,7 @@ export interface components {
             id: string;
             /** Name */
             name: string;
+            color: components["schemas"]["TagColor"];
         };
         /**
          * TaskListResponse
@@ -928,6 +927,15 @@ export interface components {
             notifications_enabled?: boolean | null;
             /** Time Zone */
             time_zone?: string | null;
+        };
+        /**
+         * UpdateTagRequest
+         * @description Partial Tag update: any omitted field keeps its current value; an empty body is a no-op.
+         */
+        UpdateTagRequest: {
+            /** Name */
+            name?: string | null;
+            color?: components["schemas"]["TagColor"] | null;
         };
         /**
          * UpdateTaskRequest
@@ -1524,6 +1532,15 @@ export interface operations {
                     "application/json": components["schemas"]["TagListResponse"];
                 };
             };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -1555,18 +1572,36 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
     };
-    rename_api_v1_tags__tag_id__patch: {
+    update_api_v1_tags__tag_id__patch: {
         parameters: {
             query?: never;
             header?: never;
@@ -1579,7 +1614,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RenameTagRequest"];
+                "application/json": components["schemas"]["UpdateTagRequest"];
             };
         };
         responses: {
@@ -1592,13 +1627,31 @@ export interface operations {
                     "application/json": components["schemas"]["TagResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };

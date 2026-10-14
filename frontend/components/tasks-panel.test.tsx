@@ -195,7 +195,7 @@ describe("TasksPanel — create on Enter", () => {
 
 describe("TasksPanel — filtering", () => {
   it("requests the Active list with the text query combined with selected Tags", async () => {
-    setupFixture({ tags: [{ id: "tag-a", name: "Work" }] });
+    setupFixture({ tags: [{ id: "tag-a", name: "Work", color: "rose" as const }] });
     const user = userEvent.setup();
 
     render(<TasksPanel />);

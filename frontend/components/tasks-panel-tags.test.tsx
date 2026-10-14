@@ -84,8 +84,8 @@ describe("TasksPanel — Task Tag editor", () => {
     setupServer(
       [makeTask("a", "Write report", ["t1"])],
       [
-        { id: "t1", name: "Work" },
-        { id: "t2", name: "Home" },
+        { id: "t1", name: "Work", color: "rose" as const },
+        { id: "t2", name: "Home", color: "rose" as const },
       ],
     );
     render(<TasksPanel />);
@@ -101,8 +101,8 @@ describe("TasksPanel — Task Tag editor", () => {
     setupServer(
       [makeTask("a", "Write report", ["t1", "t2"])],
       [
-        { id: "t1", name: "Work" },
-        { id: "t2", name: "Home" },
+        { id: "t1", name: "Work", color: "rose" as const },
+        { id: "t2", name: "Home", color: "rose" as const },
       ],
     );
     const user = userEvent.setup();
@@ -172,7 +172,10 @@ describe("TasksPanel — Task Tag editor", () => {
   });
 
   it("moves focus to the add input after removing a chip", async () => {
-    setupServer([makeTask("a", "Write report", ["t1"])], [{ id: "t1", name: "Work" }]);
+    setupServer(
+      [makeTask("a", "Write report", ["t1"])],
+      [{ id: "t1", name: "Work", color: "rose" as const }],
+    );
     const user = userEvent.setup();
     render(<TasksPanel />);
 
@@ -185,7 +188,10 @@ describe("TasksPanel — Task Tag editor", () => {
   });
 
   it("disables add and remove until the catalog resolves the Task's Tag names", async () => {
-    setupServer([makeTask("a", "Write report", ["t1"])], [{ id: "t1", name: "Work" }]);
+    setupServer(
+      [makeTask("a", "Write report", ["t1"])],
+      [{ id: "t1", name: "Work", color: "rose" as const }],
+    );
     let releaseCatalog: () => void = () => {};
     const catalogGate = new Promise<void>((resolve) => (releaseCatalog = resolve));
     const serve = getMock.getMockImplementation();

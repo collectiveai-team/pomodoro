@@ -13,6 +13,7 @@ from uuid import uuid4
 from pomodoro.core.logger import get_logger
 from pomodoro.core.tags import (
     Tag,
+    TagColor,
     TagId,
     TagNotFoundError,
     TagRepository,
@@ -66,24 +67,39 @@ def list_tags(*, user_id: UserId, tag_repository: TagRepository) -> list[Tag]:
     return tag_repository.list_all(user_id)
 
 
-def rename_tag(*, user_id: UserId, tag_id: TagId, name: str, tag_repository: TagRepository) -> Tag:
-    """Rename a Tag, rejecting a collision with another of the caller's Tags.
+def update_tag(
+    *,
+    user_id: UserId,
+    tag_id: TagId,
+    name: str | None,
+    color: TagColor | None,
+    tag_repository: TagRepository,
+) -> Tag:
+    """Rename and/or recolor a Tag; an omitted field keeps its current value.
 
+    A new name is rejected when it collides with another of the caller's Tags.
     Raises `TagNotFoundError` when the Tag does not exist or belongs to another User.
     """
     tag = tag_repository.get_by_id(user_id, tag_id)
     if tag is None:
         raise TagNotFoundError(f"Tag {tag_id} not found.")
 
-    validated_name = validate_tag_name(name)
-    name_key = normalize_tag_name(validated_name)
-    existing_tags = tag_repository.list_all(user_id)
-    ensure_unique_tag_name(name_key=name_key, existing_tags=existing_tags, exclude_tag_id=tag_id)
+    if name is not None:
+        validated_name = validate_tag_name(name)
+        name_key = normalize_tag_name(validated_name)
+        ensure_unique_tag_name(
+            name_key=name_key,
+            existing_tags=tag_repository.list_all(user_id),
+            exclude_tag_id=tag_id,
+        )
+        tag_repository.update_name(user_id, tag_id, validated_name, name_key)
+        tag = replace(tag, name=validated_name, name_key=name_key)
+    if color is not None:
+        tag_repository.update_color(user_id, tag_id, color)
+        tag = replace(tag, color=color)
 
-    tag_repository.update_name(user_id, tag_id, validated_name, name_key)
-
-    log.info("tag_renamed", tag_id=str(tag_id))
-    return replace(tag, name=validated_name, name_key=name_key)
+    log.info("tag_updated", tag_id=str(tag_id))
+    return tag
 
 
 def delete_tag(*, user_id: UserId, tag_id: TagId, tag_repository: TagRepository) -> None:

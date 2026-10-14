@@ -52,6 +52,15 @@ class SqlTagRepository:
         self._session.add(row)
         self._session.commit()
 
+    def update_color(self, user_id: UserId, tag_id: TagId, color: TagColor) -> None:
+        """Overwrite a Tag's palette color."""
+        row = self._session.get(TagTable, tag_id)
+        if row is None or row.user_id != user_id:
+            return
+        row.color = color.value
+        self._session.add(row)
+        self._session.commit()
+
     def delete(self, user_id: UserId, tag_id: TagId) -> None:
         """Permanently remove the caller's Tag; `task_tags` rows cascade via the FK."""
         row = self._session.get(TagTable, tag_id)

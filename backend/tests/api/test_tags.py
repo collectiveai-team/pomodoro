@@ -135,12 +135,90 @@ def test_renaming_a_tag_propagates_to_every_task_carrying_it(client: TestClient)
     response = client.patch(f"{TAGS_URL}/{tag_id}", json={"name": "Job"})
 
     assert response.status_code == 200
-    assert response.json() == {"id": tag_id, "name": "Job"}
+    assert response.json() == {"id": tag_id, "name": "Job", "color": "rose"}
 
     listed = client.get(TASKS_URL).json()["tasks"][0]
     assert listed["tag_ids"] == [tag_id]
     catalog = client.get(TAGS_URL).json()["tags"]
-    assert catalog == [{"id": tag_id, "name": "Job"}]
+    assert catalog == [{"id": tag_id, "name": "Job", "color": "rose"}]
+
+
+def _tag_with_color(client: TestClient, name: str = "Work") -> tuple[str, str]:
+    task = _create_task(client, f"Task for {name}")
+    tag_id = _set_tags(client, task["id"], [name])["tag_ids"][0]
+    (tag,) = [t for t in client.get(TAGS_URL).json()["tags"] if t["id"] == tag_id]
+    return tag_id, tag["color"]
+
+
+def test_new_tags_are_listed_with_a_palette_color(client: TestClient) -> None:
+    _register(client)
+
+    _, color = _tag_with_color(client)
+
+    assert color == "rose"
+
+
+def test_recoloring_a_tag_keeps_its_name(client: TestClient) -> None:
+    _register(client)
+    tag_id, _ = _tag_with_color(client)
+
+    response = client.patch(f"{TAGS_URL}/{tag_id}", json={"color": "teal"})
+
+    assert response.status_code == 200
+    assert response.json() == {"id": tag_id, "name": "Work", "color": "teal"}
+    assert client.get(TAGS_URL).json()["tags"] == [response.json()]
+
+
+def test_renaming_and_recoloring_in_one_request(client: TestClient) -> None:
+    _register(client)
+    tag_id, _ = _tag_with_color(client)
+
+    response = client.patch(f"{TAGS_URL}/{tag_id}", json={"name": "Job", "color": "slate"})
+
+    assert response.json() == {"id": tag_id, "name": "Job", "color": "slate"}
+
+
+def test_renaming_a_tag_keeps_its_color(client: TestClient) -> None:
+    _register(client)
+    tag_id, _ = _tag_with_color(client)
+    client.patch(f"{TAGS_URL}/{tag_id}", json={"color": "violet"})
+
+    response = client.patch(f"{TAGS_URL}/{tag_id}", json={"name": "Job"})
+
+    assert response.json()["color"] == "violet"
+
+
+def test_an_empty_update_body_is_a_no_op(client: TestClient) -> None:
+    _register(client)
+    tag_id, color = _tag_with_color(client)
+
+    response = client.patch(f"{TAGS_URL}/{tag_id}", json={})
+
+    assert response.status_code == 200
+    assert response.json() == {"id": tag_id, "name": "Work", "color": color}
+
+
+def test_a_color_outside_the_palette_is_rejected(client: TestClient) -> None:
+    _register(client)
+    tag_id, color = _tag_with_color(client)
+
+    response = client.patch(f"{TAGS_URL}/{tag_id}", json={"color": "#ff0000"})
+
+    assert response.status_code == 422
+    assert client.get(TAGS_URL).json()["tags"][0]["color"] == color
+
+
+def test_one_user_cannot_recolor_another_users_tag(client: TestClient) -> None:
+    _register(client, email="first@example.com")
+    tag_id, _ = _tag_with_color(client)
+
+    client.cookies.clear()
+    _register(client, email="second@example.com")
+
+    response = client.patch(f"{TAGS_URL}/{tag_id}", json={"color": "teal"})
+
+    assert response.status_code == 404
+    assert response.json()["code"] == "tag_not_found"
 
 
 def test_renaming_a_tag_to_a_normalized_collision_is_rejected(client: TestClient) -> None:

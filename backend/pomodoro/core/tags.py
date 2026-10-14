@@ -115,6 +115,10 @@ class TagRepository(Protocol):
         """Overwrite a Tag's name and derived key."""
         ...
 
+    def update_color(self, user_id: UserId, tag_id: TagId, color: TagColor) -> None:
+        """Overwrite a Tag's palette color."""
+        ...
+
     def delete(self, user_id: UserId, tag_id: TagId) -> None:
         """Permanently remove the caller's Tag, cascading to every Task that carries it."""
         ...

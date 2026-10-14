@@ -73,8 +73,8 @@ function setupRename(tags: TagResponseBody[]) {
   );
 }
 
-const WORK = { id: "t1", name: "Work" };
-const HOME = { id: "t2", name: "Home" };
+const WORK = { id: "t1", name: "Work", color: "rose" as const };
+const HOME = { id: "t2", name: "Home", color: "rose" as const };
 
 async function openManager(user: ReturnType<typeof userEvent.setup>) {
   await user.click(await screen.findByRole("button", { name: "Etiquetas" }));

@@ -5,7 +5,7 @@ from __future__ import annotations
 from uuid import UUID, uuid4
 
 import pytest
-from pomodoro.api.v1.tags.use_cases import rename_tag, resolve_tag_ids_by_names
+from pomodoro.api.v1.tags.use_cases import resolve_tag_ids_by_names, update_tag
 from pomodoro.core.tags import Tag, TagColor, TagId, normalize_tag_name, pick_tag_color
 from pomodoro.core.users import UserId
 
@@ -32,6 +32,10 @@ class InMemoryTagRepository:
     def update_name(self, user_id: UserId, tag_id: TagId, name: str, name_key: str) -> None:
         tag = self.tags[tag_id]
         self.tags[tag_id] = Tag(tag_id, user_id, name, name_key, tag.color)
+
+    def update_color(self, user_id: UserId, tag_id: TagId, color: TagColor) -> None:
+        tag = self.tags[tag_id]
+        self.tags[tag_id] = Tag(tag_id, user_id, tag.name, tag.name_key, color)
 
     def delete(self, user_id: UserId, tag_id: TagId) -> None:
         self.tags.pop(tag_id, None)
@@ -75,7 +79,9 @@ def test_rename_keeps_color() -> None:
     (tag_id,) = resolve_tag_ids_by_names(user_id=USER_ID, names=["uno"], tag_repository=repo)
     repo.tags[tag_id] = Tag(tag_id, USER_ID, "uno", "uno", TagColor.SKY)
 
-    renamed = rename_tag(user_id=USER_ID, tag_id=tag_id, name="nuevo", tag_repository=repo)
+    renamed = update_tag(
+        user_id=USER_ID, tag_id=tag_id, name="nuevo", color=None, tag_repository=repo
+    )
 
     assert renamed.color == TagColor.SKY
     assert repo.tags[tag_id].color == TagColor.SKY
