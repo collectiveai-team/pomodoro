@@ -11,17 +11,11 @@ import { useTagCatalog } from "@/lib/use-tag-catalog";
 import { useTaskHistory } from "@/lib/use-task-history";
 import { useTaskList } from "@/lib/use-task-list";
 import { useTimerPhase } from "@/lib/use-timer-phase";
+import { useUserToday } from "@/lib/use-user-today";
 
 export interface TaskDetailDrawerProps {
   taskId: string;
   onClose: () => void;
-}
-
-function localToday(): string {
-  const now = new Date();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${now.getFullYear()}-${month}-${day}`;
 }
 
 /** Right-sliding Task detail (Stories 30-36); full screen below `md`. */
@@ -35,7 +29,7 @@ export function TaskDetailDrawer({ taskId, onClose }: TaskDetailDrawerProps) {
 
   const task = [...active.tasks, ...archived.tasks].find((candidate) => candidate.id === taskId);
   const months = useMemo(() => groupByMonth(history?.days ?? []), [history]);
-  const today = localToday();
+  const today = useUserToday() ?? "";
   const taskTags = task ? tags.filter((tag) => task.tag_ids.includes(tag.id)) : [];
   const status = isTimerTask(phase, timerTaskId, taskId)
     ? "En curso"

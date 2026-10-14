@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { apiClient } from "@/lib/api-client";
 import { redirectToLoginOn401 } from "@/lib/http-session";
 import { TIMER_CHANGED_EVENT } from "@/lib/timer-sync";
+import { useUserToday } from "@/lib/use-user-today";
 
 export interface TodayStat {
   completedCount: number;
@@ -14,14 +15,6 @@ export type TodayByTask = ReadonlyMap<string, TodayStat>;
 
 const NO_STATS: TodayByTask = new Map();
 
-/** The browser's local calendar day as `YYYY-MM-DD` (the API's `date` query parameter). */
-function localToday(): string {
-  const now = new Date();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${now.getFullYear()}-${month}-${day}`;
-}
-
 /**
  * Today's completed count and dedicated time per Task (Story 16), from `GET /history/day`.
  * Refetched on same-page Timer changes, focus, and whenever `refreshKey` changes (the Timer phase
@@ -29,10 +22,14 @@ function localToday(): string {
  */
 export function useTodayByTask(refreshKey: unknown): TodayByTask {
   const [stats, setStats] = useState<TodayByTask>(NO_STATS);
+  const today = useUserToday();
 
   const load = useCallback(async () => {
+    if (today === null) {
+      return;
+    }
     const { data, response } = await apiClient.GET("/api/v1/history/day", {
-      params: { query: { date: localToday() } },
+      params: { query: { date: today } },
     });
     if (await redirectToLoginOn401(response)) {
       return;
@@ -47,7 +44,7 @@ export function useTodayByTask(refreshKey: unknown): TodayByTask {
         ),
       );
     }
-  }, []);
+  }, [today]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: refreshKey is the refetch trigger.
   useEffect(() => {

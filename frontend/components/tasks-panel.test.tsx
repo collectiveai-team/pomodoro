@@ -121,6 +121,13 @@ function setupFixture({
     if (path === "/api/v1/history/month") {
       return Promise.resolve({ data: { days: [] }, error: undefined, response: ok() });
     }
+    if (path === "/api/v1/settings") {
+      return Promise.resolve({
+        data: { time_zone: "UTC" },
+        error: undefined,
+        response: ok(),
+      });
+    }
     throw new Error(`Unexpected GET ${path}`);
   });
 }
