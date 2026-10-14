@@ -1,9 +1,10 @@
 "use client";
 
 import type { DraggableAttributes, DraggableSyntheticListeners } from "@dnd-kit/core";
-import { type CSSProperties, useState } from "react";
+import { type CSSProperties, type Ref, useRef, useState } from "react";
 import type { components } from "@/lib/api/schema";
 import type { TodayStat } from "@/lib/use-today-by-task";
+import { type TaskActionItem, TaskActionsMenu } from "./task-actions-menu";
 import { TaskRowStats } from "./task-row-stats";
 import { TaskTextEditor } from "./task-text-editor";
 
@@ -34,6 +35,7 @@ interface ActiveRowActions {
   startDisabled: boolean;
   onStart: (taskId: string) => void;
   onArchive: (taskId: string) => void;
+  onDelete: (taskId: string) => void;
 }
 
 interface ArchivedRowActions {
@@ -59,7 +61,7 @@ export interface TaskRowProps {
   onOpenDetail?: (taskId: string) => void;
   /** 🏷: open the Tag popover (wired in T12). */
   onOpenTags?: (taskId: string) => void;
-  /** ⋯: open the actions menu (wired in T11). */
+  /** Called when the ⋯ actions menu is opened. */
   onOpenActions?: (taskId: string) => void;
   /** Present only for a draggable (Active-tab) row; the dnd-kit wiring lives in the orchestrator. */
   dragHandle?: DragHandleProps;
@@ -80,6 +82,8 @@ export function TaskRow({
   dragHandle,
 }: TaskRowProps) {
   const [editing, setEditing] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuTriggerRef = useRef<HTMLButtonElement>(null);
   const tags = task.tag_ids.flatMap((tagId) => tagsById.get(tagId) ?? []);
   return (
     <li
@@ -150,63 +154,59 @@ export function TaskRow({
       >
         🏷
       </IconButton>
-      <IconButton
-        label={`Acciones de ${task.text}`}
-        disabled={pending}
-        onClick={() => {
-          // Interim until the T11 menu: ⋯ opens the inline text editor so editing stays reachable.
-          setEditing(true);
-          onOpenActions?.(task.id);
-        }}
-      >
-        ⋯
-      </IconButton>
-      {actions.variant === "active" ? (
-        // Interim until the T11 menu takes Archivar / Desarchivar / Borrar.
-        <button
-          type="button"
+      <div className="relative">
+        <IconButton
+          label={`Acciones de ${task.text}`}
           disabled={pending}
-          onClick={() => actions.onArchive(task.id)}
-          className="btn-secondary"
+          ref={menuTriggerRef}
+          onClick={() => {
+            if (!menuOpen) onOpenActions?.(task.id);
+            setMenuOpen(!menuOpen);
+          }}
         >
-          Archivar
-        </button>
-      ) : (
-        <>
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() => actions.onUnarchive(task.id)}
-            className="btn-secondary"
-          >
-            Desarchivar
-          </button>
-          {task.deletable ? (
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => actions.onDelete(task.id)}
-              className="btn-secondary"
-            >
-              Borrar
-            </button>
-          ) : null}
-        </>
-      )}
+          ⋯
+        </IconButton>
+        {menuOpen ? (
+          <TaskActionsMenu
+            items={menuItems(task, actions, () => setEditing(true))}
+            triggerRef={menuTriggerRef}
+            onClose={() => setMenuOpen(false)}
+          />
+        ) : null}
+      </div>
     </li>
   );
 }
 
+function menuItems(
+  task: TaskResponseBody,
+  actions: TaskRowActions,
+  onEdit: () => void,
+): TaskActionItem[] {
+  const items: TaskActionItem[] = [{ label: "Editar", onSelect: onEdit }];
+  if (actions.variant === "active") {
+    items.push({ label: "Archivar", onSelect: () => actions.onArchive(task.id) });
+  } else {
+    items.push({ label: "Desarchivar", onSelect: () => actions.onUnarchive(task.id) });
+  }
+  if (task.deletable) {
+    items.push({ label: "Eliminar", onSelect: () => actions.onDelete(task.id) });
+  }
+  return items;
+}
+
 interface IconButtonProps {
+  ref?: Ref<HTMLButtonElement>;
   label: string;
   disabled?: boolean;
   onClick: () => void;
   children: string;
 }
 
-function IconButton({ label, disabled, onClick, children }: IconButtonProps) {
+function IconButton({ ref, label, disabled, onClick, children }: IconButtonProps) {
   return (
     <button
+      ref={ref}
       type="button"
       aria-label={label}
       disabled={disabled}

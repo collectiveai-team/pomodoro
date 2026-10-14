@@ -9,6 +9,7 @@ const ACTIVE: TaskRowActions = {
   startDisabled: false,
   onStart: () => {},
   onArchive: () => {},
+  onDelete: () => {},
 };
 const ARCHIVED: TaskRowActions = { variant: "archived", onUnarchive: () => {}, onDelete: () => {} };
 

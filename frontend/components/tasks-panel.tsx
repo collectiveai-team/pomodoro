@@ -288,6 +288,7 @@ export function TasksPanel() {
                         startDisabled: isTaskStartDisabled(timerPhase),
                         onStart: handleStart,
                         onArchive: handleArchive,
+                        onDelete: handleDelete,
                       }}
                     />
                   ))}

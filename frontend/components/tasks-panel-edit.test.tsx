@@ -98,6 +98,7 @@ describe("TasksPanel — inline edit of Task text", () => {
     render(<TasksPanel />);
 
     await user.click(await screen.findByRole("button", { name: "Acciones de Old text" }));
+    await user.click(screen.getByRole("menuitem", { name: "Editar" }));
     const input = screen.getByRole("textbox", { name: "Editar texto de la tarea" });
     await user.clear(input);
     await user.type(input, "New text{Enter}");
@@ -117,6 +118,7 @@ describe("TasksPanel — inline edit of Task text", () => {
 
     await user.click(await screen.findByRole("tab", { name: /Archivadas/ }));
     await user.click(await screen.findByRole("button", { name: "Acciones de Archived old" }));
+    await user.click(screen.getByRole("menuitem", { name: "Editar" }));
     const input = screen.getByRole("textbox", { name: "Editar texto de la tarea" });
     await user.clear(input);
     await user.type(input, "Archived new");
@@ -134,6 +136,7 @@ describe("TasksPanel — inline edit of Task text", () => {
     const user = userEvent.setup();
     render(<TasksPanel />);
     await user.click(await screen.findByRole("button", { name: "Acciones de Keep me" }));
+    await user.click(screen.getByRole("menuitem", { name: "Editar" }));
     failPatchWith(code);
     await user.type(screen.getByRole("textbox", { name: "Editar texto de la tarea" }), "x{Enter}");
 
@@ -148,6 +151,7 @@ describe("TasksPanel — inline edit of Task text", () => {
     const user = userEvent.setup();
     render(<TasksPanel />);
     await user.click(await screen.findByRole("button", { name: "Acciones de Untouched" }));
+    await user.click(screen.getByRole("menuitem", { name: "Editar" }));
     await user.type(screen.getByRole("textbox", { name: "Editar texto de la tarea" }), "zzz");
     await user.keyboard("{Escape}");
 
@@ -161,6 +165,7 @@ describe("TasksPanel — inline edit of Task text", () => {
     const user = userEvent.setup();
     render(<TasksPanel />);
     await user.click(await screen.findByRole("button", { name: "Acciones de Blurred" }));
+    await user.click(screen.getByRole("menuitem", { name: "Editar" }));
     await user.click(screen.getByRole("tab", { name: /Activas/ }));
 
     expect(await screen.findByText("Blurred")).toBeInTheDocument();
@@ -180,6 +185,7 @@ describe("TasksPanel — inline edit of Task text", () => {
       );
 
       await user.click(screen.getByRole("button", { name: "Acciones de Other task" }));
+      await user.click(screen.getByRole("menuitem", { name: "Editar" }));
       await user.type(
         screen.getByRole("textbox", { name: "Editar texto de la tarea" }),
         "!{Enter}",
@@ -188,6 +194,7 @@ describe("TasksPanel — inline edit of Task text", () => {
       expect(events).toHaveLength(0);
 
       await user.click(screen.getByRole("button", { name: "Acciones de Timer task" }));
+      await user.click(screen.getByRole("menuitem", { name: "Editar" }));
       await user.type(
         screen.getByRole("textbox", { name: "Editar texto de la tarea" }),
         "!{Enter}",
