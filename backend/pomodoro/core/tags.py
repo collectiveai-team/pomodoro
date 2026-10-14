@@ -11,6 +11,7 @@ every Task without application-level fan-out.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import TYPE_CHECKING, NewType, Protocol
 from uuid import UUID
 
@@ -34,6 +35,19 @@ class TagNotFoundError(LookupError):
     """Raised when a Tag does not exist, or does not belong to the caller."""
 
 
+class TagColor(StrEnum):
+    """The closed Tag palette; the stored value is the key, never a hex. Order is significant."""
+
+    ROSE = "rose"
+    ORANGE = "orange"
+    AMBER = "amber"
+    GREEN = "green"
+    TEAL = "teal"
+    SKY = "sky"
+    VIOLET = "violet"
+    SLATE = "slate"
+
+
 @dataclass(frozen=True, slots=True)
 class Tag:
     """A User-scoped label a Task can carry zero or more of."""
@@ -42,6 +56,15 @@ class Tag:
     user_id: UserId
     name: str
     name_key: str
+    color: TagColor = TagColor.ROSE
+
+
+def pick_tag_color(existing_tags: Iterable[Tag]) -> TagColor:
+    """Return the palette color the fewest of `existing_tags` use, ties broken by palette order."""
+    usage = dict.fromkeys(TagColor, 0)
+    for tag in existing_tags:
+        usage[tag.color] += 1
+    return min(TagColor, key=lambda color: usage[color])
 
 
 def normalize_tag_name(name: str) -> str:

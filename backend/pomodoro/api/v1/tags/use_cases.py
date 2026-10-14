@@ -19,6 +19,7 @@ from pomodoro.core.tags import (
     ensure_unique_tag_name,
     find_tag_by_name_key,
     normalize_tag_name,
+    pick_tag_color,
     validate_tag_name,
 )
 
@@ -47,7 +48,13 @@ def resolve_tag_ids_by_names(
             continue
         existing_tag = find_tag_by_name_key(name_key, existing_tags)
         if existing_tag is None:
-            existing_tag = Tag(id=TagId(uuid4()), user_id=user_id, name=name, name_key=name_key)
+            existing_tag = Tag(
+                id=TagId(uuid4()),
+                user_id=user_id,
+                name=name,
+                name_key=name_key,
+                color=pick_tag_color(existing_tags),
+            )
             tag_repository.add(existing_tag)
             existing_tags.append(existing_tag)
         resolved_by_key[name_key] = existing_tag.id
