@@ -85,7 +85,7 @@ export function TaskTagEditor({ task, tagsById, disabled, onSaved }: TaskTagEdit
         {task.tag_ids.map((tagId, index) => (
           <span
             key={tagId}
-            className="inline-flex items-center rounded-full bg-accent/15 pl-2 text-xs"
+            className="inline-flex items-center rounded-full bg-accent-soft pl-2 text-xs"
           >
             {names[index]}
             <button

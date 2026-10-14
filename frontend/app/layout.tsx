@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={`${olivetta.variable} ${leitura.variable}`}>
-      <body className="min-h-screen bg-base font-sans text-ink antialiased">{children}</body>
+      <body className="min-h-screen bg-bg font-sans text-ink antialiased">{children}</body>
     </html>
   );
 }

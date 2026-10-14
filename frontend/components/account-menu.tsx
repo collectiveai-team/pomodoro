@@ -284,7 +284,7 @@ export function AccountMenu() {
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-ink/15 bg-base p-4">
+    <div className="flex flex-col gap-3 rounded-lg border border-border bg-base p-4">
       {error ? (
         <p role="alert" className="text-sm text-red-600">
           {error}

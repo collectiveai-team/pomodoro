@@ -66,7 +66,7 @@ export function TaskRow({
       className={`flex items-center gap-2 rounded-lg border p-2 ${
         isCurrent
           ? "border-accent bg-accent/10 ring-2 ring-accent dark:bg-accent/20"
-          : "border-ink/15"
+          : "border-border"
       }`}
     >
       {dragHandle ? (
