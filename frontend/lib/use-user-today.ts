@@ -18,27 +18,46 @@ export function todayInZone(timeZone: string | undefined, now: Date = new Date()
   }
 }
 
+/** How often an open page re-reads the clock, so "today" rolls over at the User's midnight. */
+const CLOCK_CHECK_MS = 60_000;
+
 /**
  * The User's current calendar day (their saved `time_zone`, not the browser's), or `null` until
- * their Settings have loaded. Follows Settings saved from the Account menu.
+ * their Settings have loaded. Follows Settings saved from the Account menu, and rolls over at
+ * midnight in that zone while the page stays open (checked every minute and on window focus).
  */
 export function useUserToday(): string | null {
+  const [zone, setZone] = useState<{ timeZone: string | undefined } | null>(null);
   const [today, setToday] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     void apiClient.GET("/api/v1/settings").then(({ data }) => {
       if (!cancelled) {
-        setToday(todayInZone((data as { time_zone?: string } | undefined)?.time_zone));
+        setZone({ timeZone: (data as { time_zone?: string } | undefined)?.time_zone });
       }
     });
-    const onChanged = (event: Event) => setToday(todayInZone(settingsFromEvent(event).time_zone));
+    const onChanged = (event: Event) => setZone({ timeZone: settingsFromEvent(event).time_zone });
     window.addEventListener(SETTINGS_CHANGED_EVENT, onChanged);
     return () => {
       cancelled = true;
       window.removeEventListener(SETTINGS_CHANGED_EVENT, onChanged);
     };
   }, []);
+
+  useEffect(() => {
+    if (zone === null) {
+      return;
+    }
+    const refresh = () => setToday(todayInZone(zone.timeZone));
+    refresh();
+    const timer = window.setInterval(refresh, CLOCK_CHECK_MS);
+    window.addEventListener("focus", refresh);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+    };
+  }, [zone]);
 
   return today;
 }

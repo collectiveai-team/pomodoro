@@ -48,6 +48,7 @@ bottom-left "N" in the captures is the Next.js dev indicator, not app UI.
 - On wide the "Hoy · N Pomodoros" line sits under the Task card, not pinned to the panel bottom as
   in the prototype footer.
 - Heatmap day cells stretch to the full panel width (about 150px squares on a 1440px viewport).
-- The drawer's "Hoy" uses the browser-local date. Verified only with browser time zone equal to the
-  User's time zone; a mismatch case was not exercised.
+- The drawer's "Hoy" used the browser-local date when captured. Since fixed: the drawer and the
+  row stats read the day in the User's saved time zone (`useUserToday`) and roll over at that
+  zone's midnight while the page stays open.
 - Fonts remain the ADR-0004 open-license stand-ins.
