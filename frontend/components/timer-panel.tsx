@@ -20,6 +20,7 @@ import {
 import { redirectToLoginOn401 } from "@/lib/http-session";
 import { SETTINGS_CHANGED_EVENT, settingsFromEvent } from "@/lib/settings-sync";
 import { broadcastTimerChanged, snapshotFromEvent, TIMER_CHANGED_EVENT } from "@/lib/timer-sync";
+import { CycleDots } from "./cycle-dots";
 import { type TimerActionPath, TimerControls } from "./timer-controls";
 import { TimerRing } from "./timer-ring";
 import { TimerTaskCard } from "./timer-task-card";
@@ -284,13 +285,18 @@ export function TimerPanel({ onOpenDetail }: TimerPanelProps = {}) {
         </p>
       ) : null}
 
-      <div className="flex flex-wrap items-center justify-center gap-2">
+      <div className="flex flex-col items-center gap-3">
         <TimerControls
           phase={timer.phase}
           pending={pending}
           breakKind={timer.break_kind}
           accumulatedActiveSeconds={timer.accumulated_active_seconds}
           onAction={performAction}
+        />
+        <CycleDots
+          phase={timer.phase}
+          breakKind={timer.break_kind}
+          pomodorosUntilLongBreak={timer.pomodoros_until_long_break}
         />
       </div>
 

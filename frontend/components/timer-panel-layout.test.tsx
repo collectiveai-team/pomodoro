@@ -142,3 +142,20 @@ describe("TimerPanel — ring and footer", () => {
     await waitFor(() => expect(screen.getByText(text)).toBeTruthy());
   });
 });
+
+describe("TimerPanel — cycle dots", () => {
+  it.each([
+    ["PomodoroRunning", null, 4, 1],
+    ["PomodoroRunning", null, 2, 3],
+    ["BreakRunning", "long", 5, 5],
+    ["ReadyForNext", "long", 5, 5],
+  ])("shows %s/%s with %i left as %i of 5", async (phase, breakKind, left, filled) => {
+    current = timerIn(phase, { break_kind: breakKind, pomodoros_until_long_break: left });
+    render(<TimerPanel />);
+
+    expect(
+      await screen.findByRole("img", { name: `Ciclo: ${filled} de 5 Pomodoros` }),
+    ).toBeTruthy();
+    expect(screen.queryByText(/Para el Break largo/)).toBeNull();
+  });
+});
