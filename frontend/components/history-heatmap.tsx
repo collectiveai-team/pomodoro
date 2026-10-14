@@ -37,7 +37,7 @@ function leadingBlankCount(days: MonthDaySummaryResponse[]): number {
   return new Date(`${firstDay.day}T00:00:00Z`).getUTCDay();
 }
 
-/** The month calendar heatmap: 5-level violet intensity per day, with prev/next navigation. */
+/** The month calendar heatmap: 5-level heat-token intensity per day, with prev/next navigation. */
 export function HistoryHeatmap({
   month,
   days,
