@@ -54,8 +54,13 @@ function SortableTaskRow(props: SortableTaskRowProps) {
   );
 }
 
+export interface TasksPanelProps {
+  /** Opens the Task detail from a row's ⓘ. */
+  onOpenDetail?: (taskId: string) => void;
+}
+
 /** The Active/Archived Tasks panel: counters, filter, creation, drag-reorder, and row actions. */
-export function TasksPanel() {
+export function TasksPanel({ onOpenDetail }: TasksPanelProps = {}) {
   const [tab, setTab] = useState<"active" | "archived" | "history">("active");
   const tags = useTagCatalog();
   const [activeFilter, setActiveFilter] = useState<TaskFilterState>(EMPTY_TASK_FILTER);
@@ -181,6 +186,7 @@ export function TasksPanel() {
       isCurrent: isTimerTask(timerPhase, timerTaskId, taskId),
       onTextSaved: handleTextSaved,
       onOpenTags: setTagTaskId,
+      onOpenDetail,
       todayStat: todayByTask.get(taskId),
     };
   }

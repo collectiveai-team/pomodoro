@@ -168,3 +168,16 @@ body {
 @utility tabular {
   font-variant-numeric: tabular-nums;
 }
+
+@keyframes drawer-slide-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.drawer-slide-in {
+  animation: drawer-slide-in 180ms ease-out;
+}

@@ -45,7 +45,7 @@ function phaseEndMessage(timer: TimerResponseBody): { title: string; body: strin
 }
 
 export interface TimerPanelProps {
-  /** Opens the Task detail from the Task card's ⓘ (wired to the drawer later). */
+  /** Opens the Task detail from the Task card's ⓘ (wired to the drawer by the home workspace). */
   onOpenDetail?: (taskId: string) => void;
 }
 
