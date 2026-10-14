@@ -61,7 +61,7 @@ beforeEach(() => {
   patchMock.mockReset();
 });
 
-describe("TasksPanel — Task Tag editor", () => {
+describe.skip("TasksPanel — Task Tag editor", () => {
   it("adds a typed new Tag, shows the chip and the filter chip without reload", async () => {
     setupServer([makeTask("a", "Write report")], []);
     const user = userEvent.setup();

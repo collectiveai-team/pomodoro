@@ -111,6 +111,13 @@ function setupFixture({
     if (path === "/api/v1/timer") {
       return Promise.resolve({ data: makeTimer(timerPhase), error: undefined, response: ok() });
     }
+    if (path === "/api/v1/history/day") {
+      return Promise.resolve({
+        data: { day: "2026-01-01", completed_count: 0, tasks: [] },
+        error: undefined,
+        response: ok(),
+      });
+    }
     if (path === "/api/v1/history/month") {
       return Promise.resolve({ data: { days: [] }, error: undefined, response: ok() });
     }

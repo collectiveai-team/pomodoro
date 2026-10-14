@@ -98,6 +98,12 @@ beforeEach(() => {
   deleteMock.mockReset();
 });
 
+async function rowOf(): Promise<HTMLElement> {
+  const row = (await screen.findByText("Write report")).closest("li");
+  if (!row) throw new Error("no row");
+  return row;
+}
+
 describe("TasksPanel — Tag manager", () => {
   it("renames a Tag on Task chips and filter chips without reload", async () => {
     const tags = [{ ...WORK }, { ...HOME }];
@@ -116,7 +122,7 @@ describe("TasksPanel — Tag manager", () => {
     });
     const filter = screen.getByRole("group", { name: /Filtrar Activas - Tags/ });
     expect(await within(filter).findByRole("button", { name: "Deep Work" })).toBeVisible();
-    expect(await screen.findByRole("button", { name: "Quitar etiqueta Deep Work" })).toBeVisible();
+    expect(await within(await rowOf()).findByText("Deep Work")).toBeVisible();
     expect(within(filter).queryByRole("button", { name: "Work" })).toBeNull();
   });
 
@@ -204,14 +210,13 @@ describe("TasksPanel — Tag manager", () => {
     const manager = await openManager(user);
     await user.click(within(manager).getByRole("button", { name: "Eliminar etiqueta Work" }));
 
-    await waitFor(() =>
-      expect(screen.queryByRole("button", { name: "Quitar etiqueta Work" })).toBeNull(),
-    );
+    const row = await rowOf();
+    await waitFor(() => expect(within(row).queryByText("Work")).toBeNull());
     expect(deleteMock).toHaveBeenCalledWith("/api/v1/tags/{tag_id}", {
       params: { path: { tag_id: "t1" } },
     });
     expect(within(filter).queryByRole("button", { name: "Work" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Quitar etiqueta Home" })).toBeVisible();
+    expect(within(row).getByText("Home")).toBeVisible();
     expect(within(filter).getByRole("button", { name: "Sin etiqueta" })).toHaveAttribute(
       "aria-pressed",
       "false",

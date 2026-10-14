@@ -16,6 +16,7 @@ import { useTagCatalog } from "@/lib/use-tag-catalog";
 import { useTaskList } from "@/lib/use-task-list";
 import { createDragEndHandler, useTaskReorderSensors } from "@/lib/use-task-reorder";
 import { useTimerPhase } from "@/lib/use-timer-phase";
+import { useTodayByTask } from "@/lib/use-today-by-task";
 import { AccountMenu } from "./account-menu";
 import { HistoryPanel } from "./history-panel";
 import { TabButton } from "./tab-button";
@@ -69,6 +70,7 @@ export function TasksPanel() {
   const [archivedState, refetchArchived] = useTaskList("archived", archivedFilter);
   const { phase: timerPhase, taskId: timerTaskId, setPhase: setTimerPhase } = useTimerPhase();
 
+  const todayByTask = useTodayByTask(timerPhase);
   const tagsById = useMemo(() => new Map(tags.map((tag) => [tag.id, tag])), [tags]);
 
   function refetchBoth() {
@@ -176,7 +178,7 @@ export function TasksPanel() {
       pending: pendingTaskId === taskId,
       isCurrent: isTimerTask(timerPhase, timerTaskId, taskId),
       onTextSaved: handleTextSaved,
-      onTagsSaved: refetchBoth,
+      todayStat: todayByTask.get(taskId),
     };
   }
 
@@ -275,7 +277,7 @@ export function TasksPanel() {
                 items={activeState.tasks.map((task) => task.id)}
                 strategy={verticalListSortingStrategy}
               >
-                <ul className="flex flex-col gap-2">
+                <ul className="flex flex-col">
                   {activeState.tasks.map((task: TaskResponseBody) => (
                     <SortableTaskRow
                       key={task.id}
@@ -304,7 +306,7 @@ export function TasksPanel() {
               onChange={setArchivedFilter}
             />
 
-            <ul className="flex flex-col gap-2">
+            <ul className="flex flex-col">
               {archivedState.tasks.map((task: TaskResponseBody) => (
                 <TaskRow
                   key={task.id}
