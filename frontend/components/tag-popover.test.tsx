@@ -82,6 +82,13 @@ function setupServer(tasks: TaskResponseBody[], tags: TagResponseBody[]) {
 }
 
 const WORK: TagResponseBody = { id: "t1", name: "Work", color: "rose" };
+/** Row Tag pills named `name`; the popover now lives inside the row, so skip its entries. */
+function rowPills(row: HTMLElement, name: string): HTMLElement[] {
+  return within(row)
+    .queryAllByText(name)
+    .filter((element) => element.closest('[role="dialog"]') === null);
+}
+
 const HOME: TagResponseBody = { id: "t2", name: "Home", color: "green" };
 
 async function openPopover(user: ReturnType<typeof userEvent.setup>, taskText: string) {
@@ -127,6 +134,28 @@ describe("Tag popover", () => {
     expect(screen.queryByRole("button", { name: /^Etiquetas$/ })).toBeNull();
   });
 
+  it("anchors the popover inside the row of the Task whose 🏷 opened it", async () => {
+    setupServer([makeTask("a", "Write report", []), makeTask("b", "Water plants", [])], [WORK]);
+    const user = userEvent.setup();
+    render(<TasksPanel />);
+    const row = (await screen.findByText("Water plants")).closest("li") as HTMLElement;
+
+    const dialog = await openPopover(user, "Water plants");
+
+    expect(row).toContainElement(dialog);
+  });
+
+  it("closes the popover when its own 🏷 is clicked again", async () => {
+    setupServer([makeTask("a", "Write report", [])], [WORK]);
+    const user = userEvent.setup();
+    render(<TasksPanel />);
+    await openPopover(user, "Write report");
+
+    await user.click(screen.getByRole("button", { name: "Etiquetas de Write report" }));
+
+    expect(screen.queryByRole("dialog", { name: "Etiquetas de Write report" })).toBeNull();
+  });
+
   it("marks assigned Tags and toggles assignment on click, updating the row pills", async () => {
     setupServer([makeTask("a", "Write report", ["t1"])], [WORK, HOME]);
     const user = userEvent.setup();
@@ -149,11 +178,11 @@ describe("Tag popover", () => {
       params: { path: { task_id: "a" } },
       body: { names: ["Work", "Home"] },
     });
-    expect(await within(row).findByText("Home")).toBeVisible();
+    await vi.waitFor(() => expect(rowPills(row, "Home")).toHaveLength(1));
 
     await user.click(within(dialog).getByRole("button", { name: "Etiqueta Work" }));
-    await vi.waitFor(() => expect(within(row).queryByText("Work")).toBeNull());
-    expect(within(row).getByText("Home")).toBeVisible();
+    await vi.waitFor(() => expect(rowPills(row, "Work")).toHaveLength(0));
+    expect(rowPills(row, "Home")).toHaveLength(1);
   });
 
   it("filters the list while typing", async () => {

@@ -37,7 +37,9 @@ export function TagPopover({ task, tags, onChanged, onDeleted, onClose }: TagPop
 
   useEffect(() => {
     function onPointerDown(event: MouseEvent) {
-      if (!ref.current?.contains(event.target as Node)) {
+      // The anchor wrapper holds the 🏷 trigger too: its own click toggles the popover.
+      const anchor = ref.current?.parentElement;
+      if (!anchor?.contains(event.target as Node)) {
         onClose();
       }
     }
@@ -104,7 +106,7 @@ export function TagPopover({ task, tags, onChanged, onDeleted, onClose }: TagPop
       role="dialog"
       aria-label={`Etiquetas de ${task.text}`}
       onKeyDown={handleKeyDown}
-      className="fixed left-1/2 top-24 z-20 flex max-h-[70vh] w-[min(22rem,92vw)] -translate-x-1/2 flex-col gap-2 overflow-y-auto rounded-lg border border-border bg-surface p-3 shadow-lg"
+      className="fixed left-1/2 top-24 z-20 flex max-h-[70vh] w-[min(22rem,92vw)] -translate-x-1/2 flex-col md:absolute md:left-auto md:right-0 md:top-full md:mt-1 md:translate-x-0 gap-2 overflow-y-auto rounded-lg border border-border bg-surface p-3 shadow-lg"
     >
       <h2 className="text-sm font-medium">Etiquetas de {task.text}</h2>
       <form onSubmit={handleSubmit}>

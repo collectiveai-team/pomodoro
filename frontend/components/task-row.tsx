@@ -1,7 +1,7 @@
 "use client";
 
 import type { DraggableAttributes, DraggableSyntheticListeners } from "@dnd-kit/core";
-import { type CSSProperties, type Ref, useRef, useState } from "react";
+import { type CSSProperties, type ReactNode, type Ref, useRef, useState } from "react";
 import type { components } from "@/lib/api/schema";
 import type { TodayStat } from "@/lib/use-today-by-task";
 import { type TaskActionItem, TaskActionsMenu } from "./task-actions-menu";
@@ -61,6 +61,8 @@ export interface TaskRowProps {
   onOpenDetail?: (taskId: string) => void;
   /** 🏷: open the Tag popover (wired in T12). */
   onOpenTags?: (taskId: string) => void;
+  /** The open Tag popover for this row; rendered anchored under its 🏷 button. */
+  tagPopover?: ReactNode;
   /** Called when the ⋯ actions menu is opened. */
   onOpenActions?: (taskId: string) => void;
   /** Present only for a draggable (Active-tab) row; the dnd-kit wiring lives in the orchestrator. */
@@ -78,6 +80,7 @@ export function TaskRow({
   todayStat,
   onOpenDetail,
   onOpenTags,
+  tagPopover,
   onOpenActions,
   dragHandle,
 }: TaskRowProps) {
@@ -147,13 +150,16 @@ export function TaskRow({
       <IconButton label={`Detalle de ${task.text}`} onClick={() => onOpenDetail?.(task.id)}>
         ⓘ
       </IconButton>
-      <IconButton
-        label={`Etiquetas de ${task.text}`}
-        disabled={pending}
-        onClick={() => onOpenTags?.(task.id)}
-      >
-        🏷
-      </IconButton>
+      <div className="relative">
+        <IconButton
+          label={`Etiquetas de ${task.text}`}
+          disabled={pending}
+          onClick={() => onOpenTags?.(task.id)}
+        >
+          🏷
+        </IconButton>
+        {tagPopover}
+      </div>
       <div className="relative">
         <IconButton
           label={`Acciones de ${task.text}`}

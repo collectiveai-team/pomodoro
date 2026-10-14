@@ -72,6 +72,10 @@ export function TasksPanel({ onOpenDetail }: TasksPanelProps = {}) {
   const [actionError, setActionError] = useState<string | null>(null);
   const [tagTaskId, setTagTaskId] = useState<string | null>(null);
   const closeTagPopover = useCallback(() => setTagTaskId(null), []);
+  const toggleTagPopover = useCallback(
+    (taskId: string) => setTagTaskId((current) => (current === taskId ? null : taskId)),
+    [],
+  );
 
   const [activeState, refetchActive] = useTaskList("active", activeFilter);
   const [archivedState, refetchArchived] = useTaskList("archived", archivedFilter);
@@ -185,7 +189,8 @@ export function TasksPanel({ onOpenDetail }: TasksPanelProps = {}) {
       pending: pendingTaskId === taskId,
       isCurrent: isTimerTask(timerPhase, timerTaskId, taskId),
       onTextSaved: handleTextSaved,
-      onOpenTags: setTagTaskId,
+      onOpenTags: toggleTagPopover,
+      tagPopover: tagTask?.id === taskId ? tagPopover : null,
       onOpenDetail,
       todayStat: todayByTask.get(taskId),
     };
@@ -221,6 +226,17 @@ export function TasksPanel({ onOpenDetail }: TasksPanelProps = {}) {
     (task) => task.id === tagTaskId,
   );
 
+  const tagPopover = tagTask ? (
+    <TagPopover
+      key={tagTask.id}
+      task={tagTask}
+      tags={tags}
+      onChanged={refetchBoth}
+      onDeleted={dropDeletedTag}
+      onClose={closeTagPopover}
+    />
+  ) : null;
+
   return (
     <section className="flex w-full flex-col gap-4">
       <div className="flex items-center gap-4 border-b border-border px-6" role="tablist">
@@ -247,17 +263,6 @@ export function TasksPanel({ onOpenDetail }: TasksPanelProps = {}) {
       </div>
 
       <div className="flex flex-col gap-4 px-6 pb-6">
-        {tagTask ? (
-          <TagPopover
-            key={tagTask.id}
-            task={tagTask}
-            tags={tags}
-            onChanged={refetchBoth}
-            onDeleted={dropDeletedTag}
-            onClose={closeTagPopover}
-          />
-        ) : null}
-
         {actionError ? (
           <p role="alert" className="text-sm text-red-600">
             {actionError}
