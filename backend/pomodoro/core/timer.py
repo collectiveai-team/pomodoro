@@ -126,6 +126,10 @@ class PomodoroRepository(Protocol):
         """Return `user_id`'s Pomodoros whose `ended_at` falls in `[start, end)` UTC (T18)."""
         ...
 
+    def list_for_task(self, user_id: UserId, task_id: TaskId) -> list[Pomodoro]:
+        """Return `user_id`'s Pomodoros recorded against `task_id`, by completion time."""
+        ...
+
 
 def active_seconds(timer: Timer, now: datetime) -> int:
     """Return elapsed active seconds, excluding any paused interval."""

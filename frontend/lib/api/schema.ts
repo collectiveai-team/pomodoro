@@ -222,6 +222,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tasks/{task_id}/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read History
+         * @description Return the Task's totals, first/last worked day and per-day rows, newest day first.
+         */
+        get: operations["read_history_api_v1_tasks__task_id__history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tasks/{task_id}/archive": {
         parameters: {
             query?: never;
@@ -837,6 +857,39 @@ export interface components {
             color: components["schemas"]["TagColor"];
         };
         /**
+         * TaskHistoryDayResponse
+         * @description One local day of a Task's History.
+         */
+        TaskHistoryDayResponse: {
+            /**
+             * Day
+             * Format: date
+             */
+            day: string;
+            /** Completed Count */
+            completed_count: number;
+            /** Dedicated Seconds */
+            dedicated_seconds: number;
+        };
+        /**
+         * TaskHistoryResponse
+         * @description A Task's whole History: totals, first/last worked day and per-day rows, newest first.
+         */
+        TaskHistoryResponse: {
+            /** Completed Count */
+            completed_count: number;
+            /** Dedicated Seconds */
+            dedicated_seconds: number;
+            /** First Day */
+            first_day: string | null;
+            /** Last Day */
+            last_day: string | null;
+            /** Active Days */
+            active_days: number;
+            /** Days */
+            days: components["schemas"]["TaskHistoryDayResponse"][];
+        };
+        /**
          * TaskListResponse
          * @description A page of Tasks plus both tab-badge counts (Active/Archived).
          */
@@ -1398,6 +1451,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaskListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_history_api_v1_tasks__task_id__history_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: {
+                session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskHistoryResponse"];
                 };
             };
             /** @description Validation Error */

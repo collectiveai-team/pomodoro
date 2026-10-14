@@ -18,6 +18,10 @@ from pomodoro.api.v1.tasks.schemas.requests.reorder_tasks import ReorderTasksReq
 from pomodoro.api.v1.tasks.schemas.requests.set_task_tags import SetTaskTagsRequest
 from pomodoro.api.v1.tasks.schemas.requests.update_task import UpdateTaskRequest
 from pomodoro.api.v1.tasks.schemas.responses.task import TaskResponse
+from pomodoro.api.v1.tasks.schemas.responses.task_history import (
+    TaskHistoryDayResponse,
+    TaskHistoryResponse,
+)
 from pomodoro.api.v1.tasks.schemas.responses.task_list import TaskListResponse
 from pomodoro.api.v1.tasks.use_cases import (
     TaskListing,
@@ -25,6 +29,7 @@ from pomodoro.api.v1.tasks.use_cases import (
     create_task,
     delete_task,
     edit_task_text,
+    get_task_history,
     list_active_tasks,
     list_archived_tasks,
     reorder_tasks,
@@ -35,8 +40,9 @@ from pomodoro.core.clock import Clock
 from pomodoro.core.tags import TagId, TagRepository
 from pomodoro.core.task_filtering import TaskTagFilter, filter_tasks
 from pomodoro.core.tasks import Task, TaskId, TaskRepository
-from pomodoro.core.timer import TimerRepository
+from pomodoro.core.timer import PomodoroRepository, TimerRepository
 from pomodoro.core.users import User
+from pomodoro.database.repositories.pomodoro import get_pomodoro_repository
 from pomodoro.database.repositories.tag import get_tag_repository
 from pomodoro.database.repositories.task import get_task_repository
 from pomodoro.database.repositories.timer import get_timer_repository
@@ -151,6 +157,37 @@ def list_archived(
     listing = list_archived_tasks(user_id=user.id, task_repository=task_repository)
     filtered_tasks = filter_tasks(listing.tasks, q, _selected_tag_filters(tags))
     return _task_listing_response(listing, filtered_tasks)
+
+
+@router.get("/{task_id}/history")
+def read_history(
+    task_id: UUID,
+    user: User = Depends(get_current_user),
+    task_repository: TaskRepository = Depends(get_task_repository),
+    pomodoro_repository: PomodoroRepository = Depends(get_pomodoro_repository),
+) -> TaskHistoryResponse:
+    """Return the Task's totals, first/last worked day and per-day rows, newest day first."""
+    history = get_task_history(
+        user=user,
+        task_id=TaskId(task_id),
+        task_repository=task_repository,
+        pomodoro_repository=pomodoro_repository,
+    )
+    return TaskHistoryResponse(
+        completed_count=history.completed_count,
+        dedicated_seconds=history.dedicated_seconds,
+        first_day=history.first_day,
+        last_day=history.last_day,
+        active_days=history.active_days,
+        days=[
+            TaskHistoryDayResponse(
+                day=day.day,
+                completed_count=day.completed_count,
+                dedicated_seconds=day.dedicated_seconds,
+            )
+            for day in history.days
+        ],
+    )
 
 
 @router.post("/{task_id}/archive")

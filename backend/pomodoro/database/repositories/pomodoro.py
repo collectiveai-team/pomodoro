@@ -48,6 +48,16 @@ class SqlPomodoroRepository:
         ).all()
         return [_to_entity(row) for row in rows]
 
+    def list_for_task(self, user_id: UserId, task_id: TaskId) -> list[Pomodoro]:
+        """Return this User's Pomodoros recorded against one Task, by completion time."""
+        rows = self._session.exec(
+            select(PomodoroTable)
+            .where(PomodoroTable.user_id == user_id)
+            .where(PomodoroTable.task_id == task_id)
+            .order_by(PomodoroTable.ended_at, PomodoroTable.id)  # pyrefly: ignore[bad-argument-type]
+        ).all()
+        return [_to_entity(row) for row in rows]
+
 
 def _to_entity(row: PomodoroTable) -> Pomodoro:
     """Convert a database-only row into a framework-free recorded Pomodoro."""
