@@ -22,6 +22,7 @@ import { SETTINGS_CHANGED_EVENT, settingsFromEvent } from "@/lib/settings-sync";
 import { broadcastTimerChanged, snapshotFromEvent, TIMER_CHANGED_EVENT } from "@/lib/timer-sync";
 import { type TimerActionPath, TimerControls } from "./timer-controls";
 import { TimerRing } from "./timer-ring";
+import { TimerTaskCard } from "./timer-task-card";
 
 type TimerResponseBody = components["schemas"]["TimerResponse"];
 type SettingsResponseBody = components["schemas"]["SettingsResponse"];
@@ -42,8 +43,13 @@ function phaseEndMessage(timer: TimerResponseBody): { title: string; body: strin
   return { title: "Break terminado", body: "Volviste a estar en reposo." };
 }
 
+export interface TimerPanelProps {
+  /** Opens the Task detail from the Task card's ⓘ (wired to the drawer later). */
+  onOpenDetail?: (taskId: string) => void;
+}
+
 /** The live Timer panel: ring and phase-specific controls; Alarm settings live in the Account menu. */
-export function TimerPanel() {
+export function TimerPanel({ onOpenDetail }: TimerPanelProps = {}) {
   const [view, setView] = useState<TimerView | null>(null);
   const [settings, setSettings] = useState<SettingsResponseBody | null>(null);
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
@@ -263,9 +269,14 @@ export function TimerPanel() {
 
   return (
     <section className="flex flex-col items-center gap-4 p-4 md:gap-6 md:p-6">
-      <TimerRing phase={timer.phase} remainingSeconds={remainingSeconds} fraction={fraction} />
+      <h1 className="font-display text-xl italic">Pomodoro Collective</h1>
 
-      {timer.task ? <p className="text-sm font-medium">{timer.task.text}</p> : null}
+      <TimerRing
+        phase={timer.phase}
+        breakKind={timer.break_kind}
+        remainingSeconds={remainingSeconds}
+        fraction={fraction}
+      />
 
       {error ? (
         <p role="alert" className="text-sm text-red-600">
@@ -283,16 +294,13 @@ export function TimerPanel() {
         />
       </div>
 
-      <dl className="grid grid-cols-2 gap-x-4 text-center text-xs">
-        <div>
-          <dt>Hoy</dt>
-          <dd className="font-semibold">{timer.pomodoros_completed_today}</dd>
-        </div>
-        <div>
-          <dt>Para el Break largo</dt>
-          <dd className="font-semibold">{timer.pomodoros_until_long_break}</dd>
-        </div>
-      </dl>
+      <TimerTaskCard phase={timer.phase} task={timer.task} onOpenDetail={onOpenDetail} />
+
+      <p className="tabular hidden text-xs text-muted md:block">
+        {`Hoy · ${timer.pomodoros_completed_today} ${
+          timer.pomodoros_completed_today === 1 ? "Pomodoro" : "Pomodoros"
+        }`}
+      </p>
     </section>
   );
 }
