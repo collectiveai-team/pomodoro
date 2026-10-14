@@ -3,7 +3,7 @@
 import { closestCenter, DndContext } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { type FormEvent, useMemo, useState } from "react";
+import { type FormEvent, useCallback, useMemo, useState } from "react";
 import type { components } from "@/lib/api/schema";
 import { apiClient } from "@/lib/api-client";
 import { toApiError } from "@/lib/api-error";
@@ -20,7 +20,7 @@ import { useTodayByTask } from "@/lib/use-today-by-task";
 import { AccountMenu } from "./account-menu";
 import { HistoryPanel } from "./history-panel";
 import { TabButton } from "./tab-button";
-import { TagManager } from "./tag-manager";
+import { TagPopover } from "./tag-popover";
 import { TaskFilter } from "./task-filter";
 import { TaskRow, type TaskRowProps } from "./task-row";
 
@@ -65,6 +65,8 @@ export function TasksPanel() {
   const [creating, setCreating] = useState(false);
   const [pendingTaskId, setPendingTaskId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [tagTaskId, setTagTaskId] = useState<string | null>(null);
+  const closeTagPopover = useCallback(() => setTagTaskId(null), []);
 
   const [activeState, refetchActive] = useTaskList("active", activeFilter);
   const [archivedState, refetchArchived] = useTaskList("archived", archivedFilter);
@@ -178,6 +180,7 @@ export function TasksPanel() {
       pending: pendingTaskId === taskId,
       isCurrent: isTimerTask(timerPhase, timerTaskId, taskId),
       onTextSaved: handleTextSaved,
+      onOpenTags: setTagTaskId,
       todayStat: todayByTask.get(taskId),
     };
   }
@@ -208,6 +211,10 @@ export function TasksPanel() {
     persistReorder,
   );
 
+  const tagTask = [...activeState.tasks, ...archivedState.tasks].find(
+    (task) => task.id === tagTaskId,
+  );
+
   return (
     <section className="flex w-full flex-col gap-4">
       <div className="flex items-center gap-4 border-b border-border px-6" role="tablist">
@@ -234,7 +241,16 @@ export function TasksPanel() {
       </div>
 
       <div className="flex flex-col gap-4 px-6 pb-6">
-        <TagManager tags={tags} onChanged={refetchBoth} onDeleted={dropDeletedTag} />
+        {tagTask ? (
+          <TagPopover
+            key={tagTask.id}
+            task={tagTask}
+            tags={tags}
+            onChanged={refetchBoth}
+            onDeleted={dropDeletedTag}
+            onClose={closeTagPopover}
+          />
+        ) : null}
 
         {actionError ? (
           <p role="alert" className="text-sm text-red-600">

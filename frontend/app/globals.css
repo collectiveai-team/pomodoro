@@ -133,7 +133,6 @@ body {
 @layer components {
   .btn-primary,
   .btn-secondary,
-  .tab-button,
   .chip-button {
     @apply inline-flex min-h-8 min-w-8 items-center justify-center gap-1 rounded-lg px-3 py-1 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50;
   }
@@ -144,12 +143,8 @@ body {
     @apply bg-accent font-black text-on-accent hover:opacity-90 active:bg-accent-pressed;
   }
   .btn-secondary,
-  .tab-button,
   .chip-button {
     @apply border border-border bg-transparent text-ink hover:bg-paper;
-  }
-  .tab-button {
-    @apply aria-selected:border-transparent aria-selected:bg-accent aria-selected:text-on-accent;
   }
   .chip-button {
     @apply aria-pressed:border-transparent aria-pressed:bg-accent aria-pressed:text-on-accent;
@@ -162,7 +157,6 @@ body {
 @media (hover: none) {
   .btn-primary,
   .btn-secondary,
-  .tab-button,
   .chip-button,
   .field-input {
     min-height: 44px;
