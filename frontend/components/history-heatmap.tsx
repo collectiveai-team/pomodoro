@@ -7,11 +7,11 @@ import { type MonthKey, monthTitle, nextMonth, previousMonth } from "@/lib/histo
 type MonthDaySummaryResponse = components["schemas"]["MonthDaySummaryResponse"];
 
 const INTENSITY_CLASSES: Record<IntensityLevel, string> = {
-  0: "bg-violet-50 text-violet-900",
-  1: "bg-violet-200 text-violet-900",
-  2: "bg-violet-400 text-white",
-  3: "bg-violet-600 text-white",
-  4: "bg-violet-900 text-white",
+  0: "bg-surface text-ink",
+  1: "bg-heat-1 text-ink",
+  2: "bg-heat-2 text-ink",
+  3: "bg-heat-3 text-heat-3-ink",
+  4: "bg-heat-4 text-heat-4-ink",
 };
 
 export interface HistoryHeatmapProps {
@@ -37,7 +37,7 @@ function leadingBlankCount(days: MonthDaySummaryResponse[]): number {
   return new Date(`${firstDay.day}T00:00:00Z`).getUTCDay();
 }
 
-/** The month calendar heatmap: 5-level violet intensity per day, with prev/next navigation. */
+/** The month calendar heatmap: 5-level heat-token intensity per day, with prev/next navigation. */
 export function HistoryHeatmap({
   month,
   days,
@@ -83,7 +83,7 @@ export function HistoryHeatmap({
               aria-label={`Día ${dayOfMonth(day.day)}: ${day.completed_count} Pomodoros`}
               aria-pressed={isSelected}
               onClick={() => onSelectDay(day.day)}
-              className={`relative flex aspect-square items-center justify-center rounded text-xs ${INTENSITY_CLASSES[level]} ${isSelected ? "ring-2 ring-violet-700" : ""}`}
+              className={`relative flex aspect-square items-center justify-center rounded text-xs ${INTENSITY_CLASSES[level]} ${isSelected ? "ring-2 ring-accent" : ""}`}
             >
               <span>{dayOfMonth(day.day)}</span>
               <span className="absolute right-0.5 bottom-0.5 text-[10px]">

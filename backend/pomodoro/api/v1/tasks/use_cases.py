@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from pomodoro.api.v1.tags.use_cases import resolve_tag_ids_by_names
+from pomodoro.core.history import build_task_history
 from pomodoro.core.logger import get_logger
 from pomodoro.core.tasks import (
     Task,
@@ -28,9 +29,10 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from pomodoro.core.clock import Clock
+    from pomodoro.core.history import TaskHistory
     from pomodoro.core.tags import TagRepository
-    from pomodoro.core.timer import TimerRepository
-    from pomodoro.core.users import UserId
+    from pomodoro.core.timer import PomodoroRepository, TimerRepository
+    from pomodoro.core.users import User, UserId
 
 log = get_logger(__name__)
 
@@ -224,3 +226,21 @@ def list_archived_tasks(*, user_id: UserId, task_repository: TaskRepository) -> 
         archived_count=len(tasks),
         task_ids_with_pomodoros=task_repository.task_ids_with_pomodoros(user_id),
     )
+
+
+def get_task_history(
+    *,
+    user: User,
+    task_id: TaskId,
+    task_repository: TaskRepository,
+    pomodoro_repository: PomodoroRepository,
+) -> TaskHistory:
+    """Return one Task's History in the caller's time zone, for Active and Archived Tasks.
+
+    Raises `TaskNotFoundError` when the Task does not exist or belongs to another User.
+    """
+    if task_repository.get_by_id(user.id, task_id) is None:
+        raise TaskNotFoundError(f"Task {task_id} not found.")
+
+    pomodoros = pomodoro_repository.list_for_task(user.id, task_id)
+    return build_task_history(pomodoros, time_zone=user.time_zone)

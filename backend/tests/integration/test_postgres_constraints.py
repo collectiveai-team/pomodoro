@@ -42,7 +42,7 @@ pytestmark = pytest.mark.integration
 
 
 def _add_tag(session: Session, user_id: UUID, *, name: str, name_key: str) -> None:
-    session.add(TagTable(user_id=user_id, name=name, name_key=name_key))
+    session.add(TagTable(user_id=user_id, name=name, name_key=name_key, color="rose"))
     session.commit()
 
 
@@ -140,7 +140,7 @@ def test_deleting_the_user_cascades_every_owned_table_despite_the_pomodoro_restr
     user_id = make_user(session)
     task_id = add_task(session, user_id, "write report", 0)
     _add_pomodoro(session, user_id, task_id)
-    session.add(TagTable(user_id=user_id, name="urgent", name_key="urgent"))
+    session.add(TagTable(user_id=user_id, name="urgent", name_key="urgent", color="rose"))
     session.add(
         AuthSessionTable(
             user_id=user_id,

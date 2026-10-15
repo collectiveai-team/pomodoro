@@ -1,65 +1,183 @@
 @import "tailwindcss";
 
 /*
- * Brand palette (Story 86): light by default, `darkAlt` under `prefers-color-scheme: dark`.
- * Declared outside `@theme` so the values can change at runtime with the system preference;
- * mirrored into `@theme inline` below so Tailwind utilities (`bg-accent`, `text-ink`, …)
- * resolve through the same CSS variables instead of a value baked in at build time.
+ * Design tokens ported from the main-window prototype (issue #19): light by default, dark values
+ * under `prefers-color-scheme: dark`. Declared outside `@theme` so the values can change at runtime
+ * with the system preference; mirrored into `@theme inline` below so Tailwind utilities
+ * (`bg-accent`, `text-ink-2`, `border-border`, …) resolve through the same CSS variables.
  */
 :root {
-  --color-base: #ffffff;
   --color-ink: #1e1e1e;
+  --color-ink-2: #4d4d4d;
+  --color-muted: #6f6f6f;
+  --color-on-accent: #ffffff;
+  --color-bg: #f5f5f5;
+  --color-surface: #ffffff;
+  --color-paper: #f5f5f5;
+  --color-overlay: #f7f7f7;
+  --color-border: #e3e3e3;
+  --color-border-strong: #c9c9c9;
   --color-accent: #8054ff;
   --color-accent-pressed: #5c3cb9;
+  --color-accent-soft: #ece6ff;
+  --color-accent-soft-ink: #5c3cb9;
+  --color-break: #1f8a70;
+  --color-break-soft: #ddf3ec;
+  --color-notice: #fcefd9;
+  --color-notice-border: #e7c784;
+  --color-notice-ink: #5c4713;
+  --color-heat-1: #e4dbff;
+  --color-heat-2: #c2afff;
+  --color-heat-3: #8054ff;
+  --color-heat-4: #331561;
+  --color-heat-3-ink: #ffffff;
+  --color-heat-4-ink: #ffffff;
+  --color-tag-rose: #d6336c;
+  --color-tag-orange: #d9480f;
+  --color-tag-amber: #b07a00;
+  --color-tag-green: #2f9e44;
+  --color-tag-teal: #0c8599;
+  --color-tag-sky: #1c7ed6;
+  --color-tag-violet: #7048e8;
+  --color-tag-slate: #5c6773;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --color-base: #16131c;
     --color-ink: #dcd7e6;
+    --color-ink-2: #a8a2b6;
+    --color-muted: #8c8598;
+    --color-on-accent: #16131c;
+    --color-bg: #0f0d13;
+    --color-surface: #16131c;
+    --color-paper: #1f1b28;
+    --color-overlay: #2b2635;
+    --color-border: #3b3547;
+    --color-border-strong: #6b6180;
     --color-accent: #a98cff;
-    /* No separate dark "pressed" value is specified by the brand spec; derive one by
-       darkening the dark accent, matching the light palette's darker-on-press pattern. */
-    --color-accent-pressed: color-mix(in srgb, #a98cff 80%, black);
+    --color-accent-pressed: #8054ff;
+    --color-accent-soft: #362a4d;
+    --color-accent-soft-ink: #dcc9ff;
+    --color-break: #5fd1ae;
+    --color-break-soft: #173a31;
+    --color-notice: #362a15;
+    --color-notice-border: #6b551c;
+    --color-notice-ink: #f2d488;
+    --color-heat-1: #2b2635;
+    --color-heat-2: #4a3d6b;
+    --color-heat-3: #8054ff;
+    --color-heat-4: #a98cff;
+    --color-heat-3-ink: #ffffff;
+    --color-heat-4-ink: #16131c;
+    --color-tag-rose: #f06595;
+    --color-tag-orange: #ff922b;
+    --color-tag-amber: #fcc419;
+    --color-tag-green: #69db7c;
+    --color-tag-teal: #3bc9db;
+    --color-tag-sky: #74c0fc;
+    --color-tag-violet: #b197fc;
+    --color-tag-slate: #adb5bd;
   }
 }
 
 @theme inline {
-  --color-base: var(--color-base);
   --color-ink: var(--color-ink);
+  --color-ink-2: var(--color-ink-2);
+  --color-muted: var(--color-muted);
+  --color-on-accent: var(--color-on-accent);
+  --color-bg: var(--color-bg);
+  --color-surface: var(--color-surface);
+  /* `base` predates the prototype tokens; it is the card/input surface. */
+  --color-base: var(--color-surface);
+  --color-paper: var(--color-paper);
+  --color-overlay: var(--color-overlay);
+  --color-border: var(--color-border);
+  --color-border-strong: var(--color-border-strong);
   --color-accent: var(--color-accent);
   --color-accent-pressed: var(--color-accent-pressed);
+  --color-accent-soft: var(--color-accent-soft);
+  --color-accent-soft-ink: var(--color-accent-soft-ink);
+  --color-break: var(--color-break);
+  --color-break-soft: var(--color-break-soft);
+  --color-notice: var(--color-notice);
+  --color-notice-border: var(--color-notice-border);
+  --color-notice-ink: var(--color-notice-ink);
+  --color-heat-1: var(--color-heat-1);
+  --color-heat-2: var(--color-heat-2);
+  --color-heat-3: var(--color-heat-3);
+  --color-heat-4: var(--color-heat-4);
+  --color-heat-3-ink: var(--color-heat-3-ink);
+  --color-heat-4-ink: var(--color-heat-4-ink);
+  --color-tag-rose: var(--color-tag-rose);
+  --color-tag-orange: var(--color-tag-orange);
+  --color-tag-amber: var(--color-tag-amber);
+  --color-tag-green: var(--color-tag-green);
+  --color-tag-teal: var(--color-tag-teal);
+  --color-tag-sky: var(--color-tag-sky);
+  --color-tag-violet: var(--color-tag-violet);
+  --color-tag-slate: var(--color-tag-slate);
   --font-sans: var(--font-olivetta), ui-sans-serif, system-ui, sans-serif;
   --font-display: var(--font-leitura), ui-serif, Georgia, serif;
 }
 
+body {
+  font-size: 14px;
+}
+
 /*
- * Shared interactive primitives (Story 87): a 44px minimum touch target everywhere. Tailwind v4's
- * `@apply` can only reference real utilities, not other custom classes, so the shared base rules
- * are applied to every button variant's selector directly instead of chaining through a `.btn`.
+ * Shared interactive primitives: buttons are 7-8px radius, chips are pills. The touch target is
+ * 44px on touch devices and 28-32px on a fine pointer. Tailwind v4's `@apply` can only reference
+ * real utilities, not other custom classes, so the shared base rules are applied to every
+ * variant's selector directly instead of chaining through a `.btn`.
  */
 @layer components {
   .btn-primary,
   .btn-secondary,
-  .tab-button,
   .chip-button {
-    @apply inline-flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex min-h-8 min-w-8 items-center justify-center gap-1 rounded-lg px-3 py-1 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .chip-button {
+    @apply rounded-full;
   }
   .btn-primary {
-    @apply bg-accent text-white hover:opacity-90 active:bg-accent-pressed;
+    @apply bg-accent font-black text-on-accent hover:opacity-90 active:bg-accent-pressed;
   }
   .btn-secondary,
-  .tab-button,
   .chip-button {
-    @apply border border-ink/15 bg-transparent text-ink hover:bg-ink/5;
-  }
-  .tab-button {
-    @apply aria-selected:border-transparent aria-selected:bg-accent aria-selected:text-white;
+    @apply border border-border bg-transparent text-ink hover:bg-paper;
   }
   .chip-button {
-    @apply aria-pressed:border-transparent aria-pressed:bg-accent aria-pressed:text-white;
+    @apply aria-pressed:border-transparent aria-pressed:bg-accent aria-pressed:text-on-accent;
   }
   .field-input {
-    @apply min-h-11 w-full rounded-lg border border-ink/15 bg-base px-3 py-2 text-sm text-ink placeholder:text-ink/40;
+    @apply min-h-8 w-full rounded-lg border border-border bg-surface px-3 py-1 text-sm text-ink placeholder:text-muted;
   }
+}
+
+@media (hover: none) {
+  .btn-primary,
+  .btn-secondary,
+  .chip-button,
+  .field-input {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* Tabular digits for timers and counters; weight 900 comes from `font-black`. */
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes drawer-slide-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.drawer-slide-in {
+  animation: drawer-slide-in 180ms ease-out;
 }

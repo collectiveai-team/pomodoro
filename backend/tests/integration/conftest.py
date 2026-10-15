@@ -24,7 +24,7 @@ from pomodoro.settings import get_settings
 from sqlmodel import Session
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
 
     from sqlalchemy import Engine
 
@@ -40,19 +40,28 @@ def postgres_url() -> str:
     return url
 
 
-def run_alembic_upgrade_head(database_url: str) -> None:
-    """Run the full Alembic migration chain against `database_url`.
+def run_alembic_upgrade_head(database_url: str, revision: str = "head") -> None:
+    """Run the Alembic migration chain against `database_url`, up to `revision` (default head).
 
     `env.py` reads the database URL only via `get_settings()` (CES-76), never a parameter, so
     redirecting a migration run means setting the `POMODORO_DATABASE_URL` env var the settings
     module itself reads, clearing the cached `Settings` before and after so other code keeps
     seeing the real default.
     """
+    _run_alembic(database_url, command.upgrade, revision)
+
+
+def run_alembic_downgrade(database_url: str, revision: str) -> None:
+    """Downgrade `database_url` to `revision`, redirected the same way as the upgrade helper."""
+    _run_alembic(database_url, command.downgrade, revision)
+
+
+def _run_alembic(database_url: str, action: Callable[[Config, str], None], revision: str) -> None:
     previous = os.environ.get("POMODORO_DATABASE_URL")
     os.environ["POMODORO_DATABASE_URL"] = database_url
     get_settings.cache_clear()
     try:
-        command.upgrade(Config(str(_REPO_ROOT / "alembic.ini")), "head")
+        action(Config(str(_REPO_ROOT / "alembic.ini")), revision)
     finally:
         if previous is None:
             os.environ.pop("POMODORO_DATABASE_URL", None)

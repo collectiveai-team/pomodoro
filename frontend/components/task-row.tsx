@@ -1,13 +1,27 @@
 "use client";
 
 import type { DraggableAttributes, DraggableSyntheticListeners } from "@dnd-kit/core";
-import { type CSSProperties, useState } from "react";
+import { type CSSProperties, type ReactNode, type Ref, useRef, useState } from "react";
 import type { components } from "@/lib/api/schema";
-import { TaskTagEditor } from "./task-tag-editor";
+import type { TodayStat } from "@/lib/use-today-by-task";
+import { type TaskActionItem, TaskActionsMenu } from "./task-actions-menu";
+import { TaskRowStats } from "./task-row-stats";
 import { TaskTextEditor } from "./task-text-editor";
 
 type TaskResponseBody = components["schemas"]["TaskResponse"];
 type TagResponseBody = components["schemas"]["TagResponse"];
+
+/** Tenue background + full-color text per Tag color (static class names for Tailwind). */
+const TAG_PILL_CLASSES: Record<TagResponseBody["color"], string> = {
+  rose: "bg-tag-rose/15 text-tag-rose",
+  orange: "bg-tag-orange/15 text-tag-orange",
+  amber: "bg-tag-amber/15 text-tag-amber",
+  green: "bg-tag-green/15 text-tag-green",
+  teal: "bg-tag-teal/15 text-tag-teal",
+  sky: "bg-tag-sky/15 text-tag-sky",
+  violet: "bg-tag-violet/15 text-tag-violet",
+  slate: "bg-tag-slate/15 text-tag-slate",
+};
 
 export interface DragHandleProps {
   attributes: DraggableAttributes;
@@ -21,6 +35,7 @@ interface ActiveRowActions {
   startDisabled: boolean;
   onStart: (taskId: string) => void;
   onArchive: (taskId: string) => void;
+  onDelete: (taskId: string) => void;
 }
 
 interface ArchivedRowActions {
@@ -40,8 +55,16 @@ export interface TaskRowProps {
   isCurrent?: boolean;
   /** Called after the Task's text was edited successfully (Story 21). */
   onTextSaved?: (taskId: string) => void;
-  /** Called after the Task's Tags were saved (Stories 32, 35). */
-  onTagsSaved: (taskId: string) => void;
+  /** Today's completed count and dedicated time for this Task; absent when none (Story 16). */
+  todayStat?: TodayStat;
+  /** ⓘ: open the Task's detail (wired in T14). */
+  onOpenDetail?: (taskId: string) => void;
+  /** 🏷: open the Tag popover (wired in T12). */
+  onOpenTags?: (taskId: string) => void;
+  /** The open Tag popover for this row; rendered anchored under its 🏷 button. */
+  tagPopover?: ReactNode;
+  /** Called when the ⋯ actions menu is opened. */
+  onOpenActions?: (taskId: string) => void;
   /** Present only for a draggable (Active-tab) row; the dnd-kit wiring lives in the orchestrator. */
   dragHandle?: DragHandleProps;
 }
@@ -54,99 +77,149 @@ export function TaskRow({
   actions,
   isCurrent = false,
   onTextSaved,
-  onTagsSaved,
+  todayStat,
+  onOpenDetail,
+  onOpenTags,
+  tagPopover,
+  onOpenActions,
   dragHandle,
 }: TaskRowProps) {
   const [editing, setEditing] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuTriggerRef = useRef<HTMLButtonElement>(null);
+  const tags = task.tag_ids.flatMap((tagId) => tagsById.get(tagId) ?? []);
   return (
     <li
       ref={dragHandle?.setNodeRef}
       style={dragHandle?.style}
       aria-current={isCurrent ? "true" : undefined}
-      className={`flex items-center gap-2 rounded-lg border p-2 ${
-        isCurrent
-          ? "border-accent bg-accent/10 ring-2 ring-accent dark:bg-accent/20"
-          : "border-ink/15"
+      className={`flex items-start gap-2 border-b border-border px-1 py-3 ${
+        isCurrent ? "rounded-lg ring-2 ring-accent" : ""
       }`}
     >
       {dragHandle ? (
         <button
           type="button"
           aria-label={`Reordenar ${task.text}`}
-          className="flex min-h-11 min-w-11 cursor-grab touch-none items-center justify-center"
+          className="flex min-h-11 min-w-8 cursor-grab touch-none items-center justify-center text-muted"
           {...dragHandle.attributes}
           {...dragHandle.listeners}
         >
-          ⠿
+          ⋮⋮
         </button>
       ) : null}
-      {editing ? (
-        <TaskTextEditor
-          taskId={task.id}
-          text={task.text}
-          onCancel={() => setEditing(false)}
-          onSaved={() => {
-            setEditing(false);
-            onTextSaved?.(task.id);
-          }}
-        />
-      ) : (
-        <>
-          <span className="flex-1">{task.text}</span>
-          <button
-            type="button"
-            aria-label={`Editar ${task.text}`}
-            disabled={pending}
-            onClick={() => setEditing(true)}
-            className="btn-secondary"
-          >
-            ✎
-          </button>
-        </>
-      )}
-      <TaskTagEditor task={task} tagsById={tagsById} disabled={pending} onSaved={onTagsSaved} />
+      <div className="flex min-w-0 flex-1 flex-col gap-1 self-center">
+        {editing ? (
+          <TaskTextEditor
+            taskId={task.id}
+            text={task.text}
+            onCancel={() => setEditing(false)}
+            onSaved={() => {
+              setEditing(false);
+              onTextSaved?.(task.id);
+            }}
+          />
+        ) : (
+          <span className="whitespace-pre-wrap break-words">{task.text}</span>
+        )}
+        {tags.length > 0 || todayStat ? (
+          <div className="flex flex-wrap items-center gap-2">
+            {tags.map((tag) => (
+              <span
+                key={tag.id}
+                className={`rounded-full px-2 py-0.5 text-xs ${TAG_PILL_CLASSES[tag.color]}`}
+              >
+                {tag.name}
+              </span>
+            ))}
+            {todayStat ? <TaskRowStats stat={todayStat} /> : null}
+          </div>
+        ) : null}
+      </div>
       {actions.variant === "active" ? (
-        <>
-          <button
-            type="button"
-            aria-label={`Iniciar Pomodoro en ${task.text}`}
-            disabled={pending || actions.startDisabled}
-            onClick={() => actions.onStart(task.id)}
-            className="btn-primary"
-          >
-            ▶
-          </button>
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() => actions.onArchive(task.id)}
-            className="btn-secondary"
-          >
-            Archivar
-          </button>
-        </>
-      ) : (
-        <>
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() => actions.onUnarchive(task.id)}
-            className="btn-secondary"
-          >
-            Desarchivar
-          </button>
-          {task.deletable ? (
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => actions.onDelete(task.id)}
-              className="btn-secondary"
-            >
-              Borrar
-            </button>
-          ) : null}
-        </>
-      )}
+        <button
+          type="button"
+          aria-label={`Iniciar Pomodoro en ${task.text}`}
+          disabled={pending || actions.startDisabled}
+          onClick={() => actions.onStart(task.id)}
+          className="btn-primary"
+        >
+          ▶
+        </button>
+      ) : null}
+      <IconButton label={`Detalle de ${task.text}`} onClick={() => onOpenDetail?.(task.id)}>
+        ⓘ
+      </IconButton>
+      <div className="relative">
+        <IconButton
+          label={`Etiquetas de ${task.text}`}
+          disabled={pending}
+          onClick={() => onOpenTags?.(task.id)}
+        >
+          🏷
+        </IconButton>
+        {tagPopover}
+      </div>
+      <div className="relative">
+        <IconButton
+          label={`Acciones de ${task.text}`}
+          disabled={pending}
+          ref={menuTriggerRef}
+          onClick={() => {
+            if (!menuOpen) onOpenActions?.(task.id);
+            setMenuOpen(!menuOpen);
+          }}
+        >
+          ⋯
+        </IconButton>
+        {menuOpen ? (
+          <TaskActionsMenu
+            items={menuItems(task, actions, () => setEditing(true))}
+            triggerRef={menuTriggerRef}
+            onClose={() => setMenuOpen(false)}
+          />
+        ) : null}
+      </div>
     </li>
+  );
+}
+
+function menuItems(
+  task: TaskResponseBody,
+  actions: TaskRowActions,
+  onEdit: () => void,
+): TaskActionItem[] {
+  const items: TaskActionItem[] = [{ label: "Editar", onSelect: onEdit }];
+  if (actions.variant === "active") {
+    items.push({ label: "Archivar", onSelect: () => actions.onArchive(task.id) });
+  } else {
+    items.push({ label: "Desarchivar", onSelect: () => actions.onUnarchive(task.id) });
+  }
+  if (task.deletable) {
+    items.push({ label: "Eliminar", onSelect: () => actions.onDelete(task.id) });
+  }
+  return items;
+}
+
+interface IconButtonProps {
+  ref?: Ref<HTMLButtonElement>;
+  label: string;
+  disabled?: boolean;
+  onClick: () => void;
+  children: string;
+}
+
+function IconButton({ ref, label, disabled, onClick, children }: IconButtonProps) {
+  return (
+    <button
+      ref={ref}
+      type="button"
+      aria-label={label}
+      disabled={disabled}
+      onClick={onClick}
+      className="flex min-h-11 min-w-8 items-center justify-center text-muted hover:text-ink disabled:opacity-50"
+    >
+      {children}
+    </button>
   );
 }

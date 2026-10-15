@@ -35,6 +35,27 @@ class DayAggregate:
     tasks: tuple[TaskDayAggregate, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class TaskHistoryDay:
+    """One local day of a single Task's History: completed count and dedicated time."""
+
+    day: date
+    completed_count: int
+    dedicated_seconds: int
+
+
+@dataclass(frozen=True, slots=True)
+class TaskHistory:
+    """One Task's whole History: totals, first/last worked day and per-day rows."""
+
+    completed_count: int
+    dedicated_seconds: int
+    first_day: date | None
+    last_day: date | None
+    active_days: int
+    days: tuple[TaskHistoryDay, ...]
+
+
 @dataclass(slots=True)
 class _DayTaskTotals:
     """Mutable running totals for one (day, Task) bucket while aggregating."""
@@ -63,6 +84,30 @@ def aggregate_pomodoros_by_day(
             totals.completed_count += 1
 
     return tuple(_build_day_aggregate(day, tasks) for day, tasks in sorted(buckets.items()))
+
+
+def build_task_history(pomodoros: Iterable[Pomodoro], *, time_zone: str) -> TaskHistory:
+    """Apply the History rule to the Pomodoros of one Task, most recent day first.
+
+    Reuses `aggregate_pomodoros_by_day`: count is completed Pomodoros, time sums completed and
+    interrupted_logged, and each Pomodoro lands whole on the local day of its `ended_at`.
+    """
+    days = tuple(
+        TaskHistoryDay(
+            day=aggregate.day,
+            completed_count=aggregate.completed_count,
+            dedicated_seconds=sum(task.dedicated_seconds for task in aggregate.tasks),
+        )
+        for aggregate in reversed(aggregate_pomodoros_by_day(pomodoros, time_zone=time_zone))
+    )
+    return TaskHistory(
+        completed_count=sum(day.completed_count for day in days),
+        dedicated_seconds=sum(day.dedicated_seconds for day in days),
+        first_day=days[-1].day if days else None,
+        last_day=days[0].day if days else None,
+        active_days=len(days),
+        days=days,
+    )
 
 
 def local_month_utc_range(year: int, month: int, *, time_zone: str) -> tuple[datetime, datetime]:

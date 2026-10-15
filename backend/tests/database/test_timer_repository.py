@@ -12,28 +12,17 @@ from pomodoro.core.tasks import TaskId
 from pomodoro.core.timer import BreakKind, Pomodoro, PomodoroStatus, Timer, TimerPhase
 from pomodoro.core.users import UserId
 from pomodoro.database import models  # noqa: F401 — registers every table on SQLModel.metadata
-from pomodoro.database.engine import build_engine
 from pomodoro.database.models.task import TaskTable
 from pomodoro.database.models.user import UserTable
 from pomodoro.database.repositories.pomodoro import SqlPomodoroRepository
 from pomodoro.database.repositories.timer import SqlTimerRepository
 from pomodoro.entrypoints.app import create_app
 from pomodoro.entrypoints.clock import SystemClock
-from sqlmodel import Session, SQLModel
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from sqlmodel import Session
 
 pytestmark = pytest.mark.unit
-
-
-@pytest.fixture
-def session() -> Generator[Session]:
-    """Return an isolated SQLite session containing the production schema."""
-    engine = build_engine("sqlite://")
-    SQLModel.metadata.create_all(engine)
-    with Session(engine) as db_session:
-        yield db_session
 
 
 @pytest.fixture

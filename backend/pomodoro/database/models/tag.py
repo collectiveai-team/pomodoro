@@ -18,3 +18,4 @@ class TagTable(SQLModel, table=True):
     user_id: UUID = Field(foreign_key="user.id", index=True, ondelete="CASCADE")
     name: str
     name_key: str
+    color: str

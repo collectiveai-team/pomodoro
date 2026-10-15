@@ -111,8 +111,22 @@ function setupFixture({
     if (path === "/api/v1/timer") {
       return Promise.resolve({ data: makeTimer(timerPhase), error: undefined, response: ok() });
     }
+    if (path === "/api/v1/history/day") {
+      return Promise.resolve({
+        data: { day: "2026-01-01", completed_count: 0, tasks: [] },
+        error: undefined,
+        response: ok(),
+      });
+    }
     if (path === "/api/v1/history/month") {
       return Promise.resolve({ data: { days: [] }, error: undefined, response: ok() });
+    }
+    if (path === "/api/v1/settings") {
+      return Promise.resolve({
+        data: { time_zone: "UTC" },
+        error: undefined,
+        response: ok(),
+      });
     }
     throw new Error(`Unexpected GET ${path}`);
   });
@@ -130,6 +144,14 @@ afterEach(() => {
 });
 
 describe("TasksPanel — create on Enter", () => {
+  it("shows the dashed '+ Nueva tarea (Enter)' row", async () => {
+    setupFixture();
+    render(<TasksPanel />);
+    const input = await screen.findByLabelText("Nueva tarea");
+    expect(input).toHaveAttribute("placeholder", "+ Nueva tarea (Enter)");
+    expect(input).toHaveClass("border-dashed");
+  });
+
   it("creates a Task and clears the input on success", async () => {
     setupFixture();
     postMock.mockResolvedValue({
@@ -195,7 +217,7 @@ describe("TasksPanel — create on Enter", () => {
 
 describe("TasksPanel — filtering", () => {
   it("requests the Active list with the text query combined with selected Tags", async () => {
-    setupFixture({ tags: [{ id: "tag-a", name: "Work" }] });
+    setupFixture({ tags: [{ id: "tag-a", name: "Work", color: "rose" as const }] });
     const user = userEvent.setup();
 
     render(<TasksPanel />);
@@ -213,8 +235,46 @@ describe("TasksPanel — filtering", () => {
   });
 });
 
+describe("TasksPanel — Active tab delete", () => {
+  it("deleting a deletable Active Task from the ⋯ menu removes it from the list", async () => {
+    const remaining = [makeTask({ id: "task-keep", text: "Keep me", deletable: false })];
+    const doomed = makeTask({ id: "task-doomed", text: "Never started", deletable: true });
+    let activeTasks = [doomed, ...remaining];
+    setupFixture({ activeTasks });
+    const baseGet = getMock.getMockImplementation();
+    getMock.mockImplementation((path: string, ...rest: unknown[]) =>
+      path === "/api/v1/tasks"
+        ? Promise.resolve({
+            data: { tasks: activeTasks, active_count: activeTasks.length, archived_count: 0 },
+            error: undefined,
+            response: ok(),
+          })
+        : baseGet?.(path, ...rest),
+    );
+    deleteMock.mockImplementation(() => {
+      activeTasks = remaining;
+      return Promise.resolve({ data: undefined, error: undefined, response: ok(204) });
+    });
+    const user = userEvent.setup();
+
+    render(<TasksPanel />);
+    await screen.findByText("Never started");
+    await user.click(screen.getByRole("button", { name: "Acciones de Keep me" }));
+    expect(screen.queryByRole("menuitem", { name: "Eliminar" })).toBeNull();
+    await user.keyboard("{Escape}");
+    await user.click(screen.getByRole("button", { name: "Acciones de Never started" }));
+    await user.click(screen.getByRole("menuitem", { name: "Eliminar" }));
+
+    await waitFor(() => expect(screen.queryByText("Never started")).toBeNull());
+    expect(deleteMock).toHaveBeenCalledWith("/api/v1/tasks/{task_id}", {
+      params: { path: { task_id: "task-doomed" } },
+    });
+    expect(screen.getByText("Keep me")).toBeVisible();
+  });
+});
+
 describe("TasksPanel — Archived tab", () => {
-  it("hides Borrar for a Task with recorded Pomodoros and shows it otherwise", async () => {
+  it("hides Eliminar for a Task with recorded Pomodoros and shows it otherwise", async () => {
     setupFixture({
       archivedTasks: [
         makeTask({ id: "task-undeletable", text: "Has Pomodoros", deletable: false }),
@@ -227,7 +287,11 @@ describe("TasksPanel — Archived tab", () => {
     await user.click(await screen.findByRole("tab", { name: /Archivadas/ }));
 
     await screen.findByText("Has Pomodoros");
-    expect(screen.getAllByRole("button", { name: "Borrar" })).toHaveLength(1);
+    await user.click(screen.getByRole("button", { name: "Acciones de Has Pomodoros" }));
+    expect(screen.queryByRole("menuitem", { name: "Eliminar" })).toBeNull();
+    await user.keyboard("{Escape}");
+    await user.click(screen.getByRole("button", { name: "Acciones de Never started" }));
+    expect(screen.getByRole("menuitem", { name: "Eliminar" })).toBeVisible();
   });
 
   it("surfaces an unarchive collision returned by the HTTP interface", async () => {
@@ -244,7 +308,8 @@ describe("TasksPanel — Archived tab", () => {
 
     render(<TasksPanel />);
     await user.click(await screen.findByRole("tab", { name: /Archivadas/ }));
-    await user.click(await screen.findByRole("button", { name: "Desarchivar" }));
+    await user.click(await screen.findByRole("button", { name: /^Acciones de/ }));
+    await user.click(screen.getByRole("menuitem", { name: "Desarchivar" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Ya existe una tarea activa con ese texto.",

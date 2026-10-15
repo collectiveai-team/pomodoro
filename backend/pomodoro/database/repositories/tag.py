@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import Depends
 from sqlmodel import Session, select
 
-from pomodoro.core.tags import Tag, TagId, TagRepository
+from pomodoro.core.tags import Tag, TagColor, TagId, TagRepository
 from pomodoro.core.users import UserId
 from pomodoro.database.models.tag import TagTable
 from pomodoro.database.session import get_db_session
@@ -20,7 +20,13 @@ class SqlTagRepository:
     def add(self, tag: Tag) -> None:
         """Insert a new `tag` row and commit."""
         self._session.add(
-            TagTable(id=tag.id, user_id=tag.user_id, name=tag.name, name_key=tag.name_key)
+            TagTable(
+                id=tag.id,
+                user_id=tag.user_id,
+                name=tag.name,
+                name_key=tag.name_key,
+                color=tag.color.value,
+            )
         )
         self._session.commit()
 
@@ -46,6 +52,15 @@ class SqlTagRepository:
         self._session.add(row)
         self._session.commit()
 
+    def update_color(self, user_id: UserId, tag_id: TagId, color: TagColor) -> None:
+        """Overwrite a Tag's palette color."""
+        row = self._session.get(TagTable, tag_id)
+        if row is None or row.user_id != user_id:
+            return
+        row.color = color.value
+        self._session.add(row)
+        self._session.commit()
+
     def delete(self, user_id: UserId, tag_id: TagId) -> None:
         """Permanently remove the caller's Tag; `task_tags` rows cascade via the FK."""
         row = self._session.get(TagTable, tag_id)
@@ -56,7 +71,13 @@ class SqlTagRepository:
 
 
 def _to_entity(row: TagTable) -> Tag:
-    return Tag(id=TagId(row.id), user_id=UserId(row.user_id), name=row.name, name_key=row.name_key)
+    return Tag(
+        id=TagId(row.id),
+        user_id=UserId(row.user_id),
+        name=row.name,
+        name_key=row.name_key,
+        color=TagColor(row.color),
+    )
 
 
 def get_tag_repository(session: Session = Depends(get_db_session)) -> TagRepository:

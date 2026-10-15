@@ -41,7 +41,7 @@ The audible cue played when a Pomodoro or a Break ends on its own; each User can
 _Avoid_: notification sound, chime
 
 **Tag**:
-A user-defined label attached to a Task, used to group and filter Tasks. A Tag belongs to one User and has its own identity shared across every one of that User's Tasks that carries it — matching is case-insensitive and trims whitespace, so renaming a Tag renames it everywhere it's used, and a Task is free to carry zero Tags.
+A user-defined label attached to a Task, used to group and filter Tasks. A Tag belongs to one User and has its own identity shared across every one of that User's Tasks that carries it — matching is case-insensitive and trims whitespace, so renaming a Tag renames it everywhere it's used, and a Task is free to carry zero Tags. Every Tag has a **color**, picked by the User from a fixed palette and assigned automatically when the Tag is created; renaming a Tag keeps its color.
 _Avoid_: category, label (as a synonym for Tag itself, use Tag)
 
 **History**:

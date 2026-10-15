@@ -1,6 +1,7 @@
 "use client";
 
 import type { components } from "@/lib/api/schema";
+import { tagDotClass } from "@/lib/tag-colors";
 import { type TaskFilterState, toggleTagFilter, UNTAGGED_FILTER } from "@/lib/task-filter";
 
 type TagResponseBody = components["schemas"]["TagResponse"];
@@ -34,7 +35,7 @@ export function TaskFilter({ label, tags, value, onChange }: TaskFilterProps) {
           type="button"
           aria-pressed={value.selectedTags.includes(UNTAGGED_FILTER)}
           onClick={() => onChange(toggleTagFilter(value, UNTAGGED_FILTER))}
-          className="chip-button"
+          className="chip-button border-dashed"
         >
           Sin etiqueta
         </button>
@@ -46,6 +47,11 @@ export function TaskFilter({ label, tags, value, onChange }: TaskFilterProps) {
             onClick={() => onChange(toggleTagFilter(value, tag.id))}
             className="chip-button"
           >
+            <span
+              aria-hidden="true"
+              data-testid="tag-chip-dot"
+              className={`inline-block h-2 w-2 shrink-0 rounded-full ${tagDotClass(tag.color)}`}
+            />
             {tag.name}
           </button>
         ))}

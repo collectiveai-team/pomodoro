@@ -26,35 +26,50 @@ function breakLabel(breakKind: BreakKind | null): string {
   return breakKind === "long" ? "Break largo" : "Break corto";
 }
 
-/** The controls for whichever phase the Timer is currently in (Stories 50, 52, 57, 59-63). */
-interface ActionButtonProps {
-  path: TimerActionPath;
-  label: string;
-  pending: boolean;
-  onAction: (path: TimerActionPath) => void;
-  variant?: "primary" | "secondary";
+interface ControlSpec {
+  primary: { path: TimerActionPath; label: string };
+  secondary: { path: TimerActionPath; label: string; icon: string };
+  prompt?: string;
 }
 
-/** One touch-sized Timer action button (Story 87), styled by primary/secondary variant. */
-function ActionButton({
-  path,
-  label,
-  pending,
-  onAction,
-  variant = "secondary",
-}: ActionButtonProps) {
-  return (
-    <button
-      type="button"
-      disabled={pending}
-      onClick={() => onAction(path)}
-      className={variant === "primary" ? "btn-primary" : "btn-secondary"}
-    >
-      {label}
-    </button>
-  );
+/** The primary and secondary action of the Timer's current phase (Stories 50, 52, 57, 59-63). */
+function controlsFor(
+  phase: TimerPhase,
+  breakKind: BreakKind | null,
+  accumulatedActiveSeconds: number,
+): ControlSpec | null {
+  const stop = { path: "/api/v1/timer/stop", label: "Detener", icon: "■" } as const;
+  const skip = { path: "/api/v1/timer/skip-break", label: "Saltar Break", icon: "⏭" } as const;
+  switch (phase) {
+    case "PomodoroRunning":
+      return { primary: { path: "/api/v1/timer/pause", label: "Pausar" }, secondary: stop };
+    case "PomodoroPaused":
+      return { primary: { path: "/api/v1/timer/resume", label: "Reanudar" }, secondary: stop };
+    case "BreakRunning":
+      return { primary: { path: "/api/v1/timer/pause", label: "Pausar" }, secondary: skip };
+    case "BreakPaused":
+      return { primary: { path: "/api/v1/timer/resume", label: "Reanudar" }, secondary: skip };
+    case "AskingToLog":
+      return {
+        prompt: `¿Registrar ${minutesForLog(accumulatedActiveSeconds)} min?`,
+        primary: { path: "/api/v1/timer/log", label: "Registrar" },
+        secondary: { path: "/api/v1/timer/discard", label: "Descartar", icon: "✕" },
+      };
+    case "ReadyForNext":
+      return {
+        primary: { path: "/api/v1/timer/next-pomodoro", label: "▶ Otro Pomodoro" },
+        secondary: {
+          path: "/api/v1/timer/start-break",
+          label: `Iniciar ${breakLabel(breakKind)}`,
+          icon: "☕",
+        },
+      };
+    default:
+      return null;
+  }
 }
 
+/** A large primary action flanked by a round icon-only secondary action (Story 87 touch size). */
 export function TimerControls({
   phase,
   pending,
@@ -62,117 +77,33 @@ export function TimerControls({
   accumulatedActiveSeconds,
   onAction,
 }: TimerControlsProps) {
-  switch (phase) {
-    case "PomodoroRunning":
-      return (
-        <>
-          <ActionButton
-            path="/api/v1/timer/pause"
-            label="Pausar"
-            pending={pending}
-            onAction={onAction}
-            variant="primary"
-          />
-          <ActionButton
-            path="/api/v1/timer/stop"
-            label="Detener"
-            pending={pending}
-            onAction={onAction}
-          />
-        </>
-      );
-    case "PomodoroPaused":
-      return (
-        <>
-          <ActionButton
-            path="/api/v1/timer/resume"
-            label="Reanudar"
-            pending={pending}
-            onAction={onAction}
-            variant="primary"
-          />
-          <ActionButton
-            path="/api/v1/timer/stop"
-            label="Detener"
-            pending={pending}
-            onAction={onAction}
-          />
-        </>
-      );
-    case "BreakRunning":
-      return (
-        <>
-          <ActionButton
-            path="/api/v1/timer/pause"
-            label="Pausar"
-            pending={pending}
-            onAction={onAction}
-            variant="primary"
-          />
-          <ActionButton
-            path="/api/v1/timer/skip-break"
-            label="Saltar Break"
-            pending={pending}
-            onAction={onAction}
-          />
-        </>
-      );
-    case "BreakPaused":
-      return (
-        <>
-          <ActionButton
-            path="/api/v1/timer/resume"
-            label="Reanudar"
-            pending={pending}
-            onAction={onAction}
-            variant="primary"
-          />
-          <ActionButton
-            path="/api/v1/timer/skip-break"
-            label="Saltar Break"
-            pending={pending}
-            onAction={onAction}
-          />
-        </>
-      );
-    case "AskingToLog":
-      return (
-        <>
-          <p>¿Registrar {minutesForLog(accumulatedActiveSeconds)} min?</p>
-          <ActionButton
-            path="/api/v1/timer/log"
-            label="Registrar"
-            pending={pending}
-            onAction={onAction}
-            variant="primary"
-          />
-          <ActionButton
-            path="/api/v1/timer/discard"
-            label="Descartar"
-            pending={pending}
-            onAction={onAction}
-          />
-        </>
-      );
-    case "ReadyForNext":
-      return (
-        <>
-          <ActionButton
-            path="/api/v1/timer/next-pomodoro"
-            label="▶ Otro Pomodoro"
-            pending={pending}
-            onAction={onAction}
-            variant="primary"
-          />
-          <ActionButton
-            path="/api/v1/timer/start-break"
-            label={`Iniciar ${breakLabel(breakKind)}`}
-            pending={pending}
-            onAction={onAction}
-          />
-        </>
-      );
-    default:
-      return <p className="text-sm">Sin Pomodoro en curso.</p>;
+  const spec = controlsFor(phase, breakKind, accumulatedActiveSeconds);
+  if (!spec) {
+    return <p className="text-sm">Sin Pomodoro en curso.</p>;
   }
+  const { primary, secondary, prompt } = spec;
+  return (
+    <div className="flex flex-col items-center gap-2">
+      {prompt ? <p>{prompt}</p> : null}
+      <div className="flex items-center justify-center gap-3">
+        <button
+          type="button"
+          aria-label={secondary.label}
+          disabled={pending}
+          onClick={() => onAction(secondary.path)}
+          className="btn-secondary h-11 w-11 rounded-full px-0"
+        >
+          <span aria-hidden="true">{secondary.icon}</span>
+        </button>
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => onAction(primary.path)}
+          className="btn-primary min-h-12 min-w-36 px-6 text-base"
+        >
+          {primary.label}
+        </button>
+      </div>
+    </div>
+  );
 }

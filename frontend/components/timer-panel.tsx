@@ -2,11 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  currentNotificationPermission,
   notifyPhaseEnd,
   type PhaseChangeTrigger,
   playAlarm,
-  requestNotificationPermission,
   shouldFireOnPhaseEnd,
   unlockAlarm,
 } from "@/lib/alarm";
@@ -20,9 +18,12 @@ import {
   syncClock,
 } from "@/lib/countdown";
 import { redirectToLoginOn401 } from "@/lib/http-session";
+import { SETTINGS_CHANGED_EVENT, settingsFromEvent } from "@/lib/settings-sync";
 import { broadcastTimerChanged, snapshotFromEvent, TIMER_CHANGED_EVENT } from "@/lib/timer-sync";
+import { CycleDots } from "./cycle-dots";
 import { type TimerActionPath, TimerControls } from "./timer-controls";
 import { TimerRing } from "./timer-ring";
+import { TimerTaskCard } from "./timer-task-card";
 
 type TimerResponseBody = components["schemas"]["TimerResponse"];
 type SettingsResponseBody = components["schemas"]["SettingsResponse"];
@@ -43,12 +44,15 @@ function phaseEndMessage(timer: TimerResponseBody): { title: string; body: strin
   return { title: "Break terminado", body: "Volviste a estar en reposo." };
 }
 
-/** The live Timer panel: ring, phase-specific controls, Alarm/notification toggles (T21). */
-export function TimerPanel() {
+export interface TimerPanelProps {
+  /** Opens the Task detail from the Task card's ⓘ (wired to the drawer by the home workspace). */
+  onOpenDetail?: (taskId: string) => void;
+}
+
+/** The live Timer panel: ring and phase-specific controls; Alarm settings live in the Account menu. */
+export function TimerPanel({ onOpenDetail }: TimerPanelProps = {}) {
   const [view, setView] = useState<TimerView | null>(null);
   const [settings, setSettings] = useState<SettingsResponseBody | null>(null);
-  const [notificationPermission, setNotificationPermission] =
-    useState<NotificationPermission>("default");
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -130,33 +134,6 @@ export function TimerPanel() {
     [view, pending, applySnapshot],
   );
 
-  const updateSettings = useCallback(
-    async (
-      partial: Partial<Pick<SettingsResponseBody, "alarm_enabled" | "notifications_enabled">>,
-    ) => {
-      const current = settingsRef.current;
-      if (!current) {
-        return;
-      }
-      const {
-        data,
-        error: settingsError,
-        response,
-      } = await apiClient.PATCH("/api/v1/settings", {
-        body: partial,
-      });
-      if (await redirectToLoginOn401(response)) {
-        return;
-      }
-      if (settingsError || !data) {
-        setError("No se pudieron guardar las preferencias.");
-        return;
-      }
-      setSettings(data);
-    },
-    [],
-  );
-
   // Initial load: Timer and settings together, with no previous phase to compare against yet.
   useEffect(() => {
     let cancelled = false;
@@ -182,7 +159,6 @@ export function TimerPanel() {
       } else {
         setError("No se pudo cargar el Timer.");
       }
-      setNotificationPermission(currentNotificationPermission());
     }
     void load();
     return () => {
@@ -247,6 +223,15 @@ export function TimerPanel() {
     return () => window.removeEventListener(TIMER_CHANGED_EVENT, handleTimerChanged);
   }, [fetchTimer]);
 
+  // The Account menu saves Alarm/notification Settings; mirror them for the next phase end.
+  useEffect(() => {
+    function handleSettingsChanged(event: Event) {
+      setSettings(settingsFromEvent(event));
+    }
+    window.addEventListener(SETTINGS_CHANGED_EVENT, handleSettingsChanged);
+    return () => window.removeEventListener(SETTINGS_CHANGED_EVENT, handleSettingsChanged);
+  }, []);
+
   // Unlocks Alarm autoplay on the User's first interaction anywhere in the panel.
   useEffect(() => {
     function handleFirstInteraction() {
@@ -259,24 +244,6 @@ export function TimerPanel() {
       window.removeEventListener("keydown", handleFirstInteraction);
     };
   }, []);
-
-  async function handleToggleAlarm() {
-    if (!settings) {
-      return;
-    }
-    await updateSettings({ alarm_enabled: !settings.alarm_enabled });
-  }
-
-  async function handleToggleNotifications() {
-    if (!settings) {
-      return;
-    }
-    const nextEnabled = !settings.notifications_enabled;
-    if (nextEnabled) {
-      setNotificationPermission(await requestNotificationPermission());
-    }
-    await updateSettings({ notifications_enabled: nextEnabled });
-  }
 
   if (!view) {
     return (
@@ -302,10 +269,15 @@ export function TimerPanel() {
   const fraction = remainingFraction(remainingSeconds ?? 0, totalSeconds);
 
   return (
-    <section className="flex flex-col items-center gap-6 p-6">
-      <TimerRing phase={timer.phase} remainingSeconds={remainingSeconds} fraction={fraction} />
+    <section className="flex flex-col items-center gap-4 p-4 md:gap-6 md:p-6">
+      <h1 className="font-display text-xl italic">Pomodoro Collective</h1>
 
-      {timer.task ? <p className="text-sm font-medium">{timer.task.text}</p> : null}
+      <TimerRing
+        phase={timer.phase}
+        breakKind={timer.break_kind}
+        remainingSeconds={remainingSeconds}
+        fraction={fraction}
+      />
 
       {error ? (
         <p role="alert" className="text-sm text-red-600">
@@ -313,7 +285,7 @@ export function TimerPanel() {
         </p>
       ) : null}
 
-      <div className="flex flex-wrap items-center justify-center gap-2">
+      <div className="flex flex-col items-center gap-3">
         <TimerControls
           phase={timer.phase}
           pending={pending}
@@ -321,38 +293,20 @@ export function TimerPanel() {
           accumulatedActiveSeconds={timer.accumulated_active_seconds}
           onAction={performAction}
         />
+        <CycleDots
+          phase={timer.phase}
+          breakKind={timer.break_kind}
+          pomodorosUntilLongBreak={timer.pomodoros_until_long_break}
+        />
       </div>
 
-      <dl className="grid grid-cols-2 gap-x-4 text-center text-xs">
-        <div>
-          <dt>Hoy</dt>
-          <dd className="font-semibold">{timer.pomodoros_completed_today}</dd>
-        </div>
-        <div>
-          <dt>Para el Break largo</dt>
-          <dd className="font-semibold">{timer.pomodoros_until_long_break}</dd>
-        </div>
-      </dl>
+      <TimerTaskCard phase={timer.phase} task={timer.task} onOpenDetail={onOpenDetail} />
 
-      {settings ? (
-        <div className="flex flex-col items-center gap-1 text-xs">
-          <label className="flex min-h-11 items-center gap-2">
-            <input type="checkbox" checked={settings.alarm_enabled} onChange={handleToggleAlarm} />
-            Alarm
-          </label>
-          <label className="flex min-h-11 items-center gap-2">
-            <input
-              type="checkbox"
-              checked={settings.notifications_enabled}
-              onChange={handleToggleNotifications}
-            />
-            Notificaciones
-          </label>
-          {settings.notifications_enabled && notificationPermission === "denied" ? (
-            <p>Permiso de notificaciones denegado por el navegador.</p>
-          ) : null}
-        </div>
-      ) : null}
+      <p className="tabular hidden text-xs text-muted md:block">
+        {`Hoy · ${timer.pomodoros_completed_today} ${
+          timer.pomodoros_completed_today === 1 ? "Pomodoro" : "Pomodoros"
+        }`}
+      </p>
     </section>
   );
 }

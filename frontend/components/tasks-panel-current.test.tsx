@@ -85,7 +85,7 @@ describe("TasksPanel — row held by the Timer", () => {
 
     await waitFor(() => expect(rowOf("Task A")).toHaveAttribute("aria-current", "true"));
     expect(rowOf("Task A").className).toContain("ring-accent");
-    expect(rowOf("Task A").className).toContain("dark:bg-accent/20");
+    expect(rowOf("Task A").className).toContain("ring-2");
     expect(rowOf("Task B")).not.toHaveAttribute("aria-current");
     expect(rowOf("Task B").className).not.toContain("ring-accent");
   });
